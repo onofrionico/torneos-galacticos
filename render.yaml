@@ -2,13 +2,13 @@ databases:
   - name: torneos-galacticos-db
     databaseName: torneos_galacticos
     user: torneos_user
-    plan: pro
+    plan: basic-256mb
 
 services:
   - type: web
     name: torneos-galacticos
     runtime: node
-    plan: pro
+    plan: starter
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
