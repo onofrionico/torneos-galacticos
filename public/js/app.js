@@ -136,10 +136,10 @@ function processGoogleCallback() {
   const error = params.get('error');
 
   if (token) {
-    // Guardar token y obtener datos del usuario
-    localStorage.setItem('token', token);
+    // Guardar token usando las claves correctas (tg_token)
+    localStorage.setItem('tg_token', token);
     API.auth.me().then(user => {
-      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('tg_user', JSON.stringify(user));
       updateNavAuth();
       showToast(`¡Bienvenido, ${user.nombre}!`);
       // Limpiar URL
@@ -147,7 +147,7 @@ function processGoogleCallback() {
     }).catch(err => {
       console.error('Error obteniendo usuario:', err);
       showToast('Error al obtener datos del usuario', 'error');
-      localStorage.removeItem('token');
+      localStorage.removeItem('tg_token');
     });
   } else if (error) {
     showToast('Error en autenticación con Google', 'error');
