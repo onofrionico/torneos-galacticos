@@ -9,6 +9,10 @@ const passport = require('./utils/passport');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Trust proxy (necesario para Render y otros proxies) ────────────────────
+// Esto permite que Express confíe en los headers X-Forwarded-* del proxy
+app.set('trust proxy', 1);
+
 // ── Seguridad y CORS ────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false, // se configura manualmente si hace falta
