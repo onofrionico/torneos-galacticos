@@ -39,6 +39,47 @@ function formatDate(dateStr) {
 
 function pct(a, b) { return b > 0 ? Math.round((a / b) * 100) : 0; }
 
+// Alternar entre URL de YouTube y archivo
+function toggleVideoInput() {
+  const tipo = document.getElementById('hl-tipo-video').value;
+  const youtubeGroup = document.getElementById('hl-youtube-group');
+  const archivoGroup = document.getElementById('hl-archivo-group');
+  const youtubeInput = document.getElementById('hl-youtube-url');
+  const archivoInput = document.getElementById('hl-video');
+  
+  if (tipo === 'youtube') {
+    youtubeGroup.style.display = 'block';
+    archivoGroup.style.display = 'none';
+    youtubeInput.required = true;
+    archivoInput.required = false;
+  } else {
+    youtubeGroup.style.display = 'none';
+    archivoGroup.style.display = 'block';
+    youtubeInput.required = false;
+    archivoInput.required = true;
+  }
+}
+
+// Extraer ID de video de YouTube desde URL
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+    /youtube\.com\/embed\/([^&\n?#]+)/,
+    /youtube\.com\/v\/([^&\n?#]+)/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  return null;
+}
+
+// Verificar si una URL es de YouTube
+function isYouTubeUrl(url) {
+  return url && (url.includes('youtube.com') || url.includes('youtu.be'));
+}
+
 // ── Navegación ────────────────────────────────────────────────────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -80,6 +121,38 @@ function closeModal(id) { document.getElementById(id)?.classList.remove('open');
 function closeOnOverlay(e) {
   if (e.target.classList.contains('modal-overlay')) {
     e.target.classList.remove('open');
+  }
+}
+
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+function loginWithGoogle() {
+  window.location.href = '/api/auth/google';
+}
+
+// Procesar token de Google OAuth desde URL
+function processGoogleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const error = params.get('error');
+
+  if (token) {
+    // Guardar token y obtener datos del usuario
+    localStorage.setItem('token', token);
+    API.auth.me().then(user => {
+      localStorage.setItem('user', JSON.stringify(user));
+      updateNavAuth();
+      showToast(`¡Bienvenido, ${user.nombre}!`);
+      // Limpiar URL
+      window.history.replaceState({}, document.title, '/');
+    }).catch(err => {
+      console.error('Error obteniendo usuario:', err);
+      showToast('Error al obtener datos del usuario', 'error');
+      localStorage.removeItem('token');
+    });
+  } else if (error) {
+    showToast('Error en autenticación con Google', 'error');
+    // Limpiar URL
+    window.history.replaceState({}, document.title, '/');
   }
 }
 
@@ -400,23 +473,80 @@ function renderHighlights(highlights) {
     el.innerHTML = '<p class="text-muted">Aún no hay highlights. ¡Sé el primero en subir uno!</p>';
     return;
   }
-  el.innerHTML = highlights.map((h, i) => `
-    <div class="highlight-card" onclick="registrarVista('${h.id}')">
-      <div class="highlight-thumb hl-${(i % 3) + 1}">
-        🏸
-        <div class="play-btn">▶</div>
-      </div>
+  el.innerHTML = highlights.map((h, i) => {
+    const isYouTube = isYouTubeUrl(h.video_url);
+    const youtubeId = isYouTube ? extractYouTubeId(h.video_url) : null;
+    
+    return `
+    <div class="highlight-card" onclick="openHighlightModal('${h.id}', ${isYouTube}, '${youtubeId || ''}', '${h.video_url}', '${h.titulo.replace(/'/g, "\\'")}')">
+      ${isYouTube && youtubeId ? `
+        <div class="highlight-thumb youtube-thumb">
+          <img src="https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg" alt="${h.titulo}" />
+          <div class="play-btn">▶</div>
+        </div>
+      ` : `
+        <div class="highlight-thumb hl-${(i % 3) + 1}">
+          🏸
+          <div class="play-btn">▶</div>
+        </div>
+      `}
       <div class="hl-meta">
         <div class="hl-title">${h.titulo}</div>
         <div class="hl-sub">${h.jugador_nombre}${h.torneo_nombre ? ' · ' + h.torneo_nombre : ''}</div>
         <div class="hl-views">⚡ ${h.vistas.toLocaleString()} vistas · ${formatDate(h.created_at)}</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function registrarVista(id) {
   try { await API.highlights.vista(id); } catch (_) {}
+}
+
+// Abrir modal para ver highlight
+function openHighlightModal(id, isYouTube, youtubeId, videoUrl, titulo) {
+  registrarVista(id);
+  
+  const modalHTML = `
+    <div class="modal-overlay open" id="modal-ver-highlight" onclick="closeOnOverlay(event)">
+      <div class="modal" style="max-width:800px;">
+        <h3>🎬 ${titulo}</h3>
+        <div class="video-container">
+          ${isYouTube && youtubeId ? `
+            <iframe 
+              width="100%" 
+              height="450" 
+              src="https://www.youtube.com/embed/${youtubeId}?autoplay=1" 
+              frameborder="0" 
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+              allowfullscreen
+            ></iframe>
+          ` : `
+            <video controls autoplay style="width:100%;border-radius:var(--radius);">
+              <source src="${videoUrl}" type="video/mp4">
+              Tu navegador no soporta el elemento de video.
+            </video>
+          `}
+        </div>
+        <div class="modal-btns">
+          <button class="btn-cancel" onclick="closeHighlightModal()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remover modal anterior si existe
+  const oldModal = document.getElementById('modal-ver-highlight');
+  if (oldModal) oldModal.remove();
+  
+  // Agregar nuevo modal
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function closeHighlightModal() {
+  const modal = document.getElementById('modal-ver-highlight');
+  if (modal) modal.remove();
 }
 
 async function handleSubirHighlight(e) {
@@ -425,21 +555,48 @@ async function handleSubirHighlight(e) {
     showToast('Iniciá sesión para subir highlights', 'info');
     return;
   }
+  
   const titulo      = document.getElementById('hl-titulo').value;
   const descripcion = document.getElementById('hl-desc').value;
   const torneo_id   = document.getElementById('hl-torneo').value;
+  const tipo        = document.getElementById('hl-tipo-video').value;
+  const youtubeUrl  = document.getElementById('hl-youtube-url').value;
   const video       = document.getElementById('hl-video').files[0];
 
-  if (!titulo || !video) {
-    showToast('El título y el video son requeridos', 'error');
+  if (!titulo) {
+    showToast('El título es requerido', 'error');
     return;
   }
 
+  if (tipo === 'youtube' && !youtubeUrl) {
+    showToast('La URL de YouTube es requerida', 'error');
+    return;
+  }
+
+  if (tipo === 'archivo' && !video) {
+    showToast('El archivo de video es requerido', 'error');
+    return;
+  }
+
+  // Validar URL de YouTube
+  if (tipo === 'youtube') {
+    const youtubeId = extractYouTubeId(youtubeUrl);
+    if (!youtubeId) {
+      showToast('URL de YouTube inválida', 'error');
+      return;
+    }
+  }
+
   const formData = new FormData();
-  formData.append('video', video);
   formData.append('titulo', titulo);
   if (descripcion) formData.append('descripcion', descripcion);
   if (torneo_id)   formData.append('torneo_id', torneo_id);
+  
+  if (tipo === 'youtube') {
+    formData.append('youtube_url', youtubeUrl);
+  } else {
+    formData.append('video', video);
+  }
 
   const btn = document.getElementById('hl-btn');
   btn.disabled = true;
@@ -450,6 +607,9 @@ async function handleSubirHighlight(e) {
     closeModal('modal-highlight');
     showToast('¡Highlight subido con éxito! 🎬');
     loadHighlights();
+    // Resetear formulario
+    document.getElementById('form-highlight').reset();
+    toggleVideoInput();
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
@@ -516,6 +676,9 @@ function renderRanking(jugadores) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Procesar callback de Google OAuth si existe
+  processGoogleCallback();
+  
   updateNavAuth();
   showPage('inicio');
 

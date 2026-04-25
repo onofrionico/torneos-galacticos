@@ -11,14 +11,16 @@ const migrations = `
     nombre        VARCHAR(100) NOT NULL,
     apellido      VARCHAR(100) NOT NULL,
     email         VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255),
+    google_id     VARCHAR(255) UNIQUE,
     telefono      VARCHAR(30),
     rol           VARCHAR(20) NOT NULL DEFAULT 'jugador' CHECK (rol IN ('jugador', 'organizador', 'admin')),
     ranking_pts   INTEGER NOT NULL DEFAULT 0,
     categoria     VARCHAR(10) NOT NULL DEFAULT '5ra' CHECK (categoria IN ('1ra','2da','3ra','4ta','5ta')),
     avatar_url    TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT password_or_google CHECK (password_hash IS NOT NULL OR google_id IS NOT NULL)
   );
 
   -- Torneos

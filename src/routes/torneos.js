@@ -30,9 +30,12 @@ router.get('/', async (req, res) => {
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `, params);
 
+    // Contar total sin limit/offset
+    const countConditions = conditions.join(' AND ');
+    const countParams = params.slice(0, -2); // Remover limit y offset
     const { rows: [{ total }] } = await query(
-      `SELECT COUNT(*) AS total FROM torneos t WHERE ${conditions.slice(0, -2).join(' AND ') || '1=1'}`,
-      params.slice(0, -2)
+      `SELECT COUNT(*) AS total FROM torneos t WHERE ${countConditions}`,
+      countParams
     );
 
     res.json({ torneos: rows, total: parseInt(total), page: parseInt(page), limit: parseInt(limit) });

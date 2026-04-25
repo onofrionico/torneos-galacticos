@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query } = require('../db');
 const { authenticate } = require('../middleware/auth');
+const passport = require('../utils/passport');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -60,6 +61,12 @@ router.post('/login', async (req, res) => {
     }
 
     const user = rows[0];
+    
+    // Si el usuario no tiene password_hash, significa que usa Google OAuth
+    if (!user.password_hash) {
+      return res.status(401).json({ error: 'Esta cuenta usa Google. Por favor ingresá con Google.' });
+    }
+    
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'Credenciales incorrectas' });
@@ -110,5 +117,48 @@ router.put('/me', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
+
+// GET /api/auth/google - Iniciar autenticación con Google (solo si está configurado)
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  router.get('/google',
+    passport.authenticate('google', { 
+      scope: ['profile', 'email'],
+      session: false
+    })
+  );
+
+  // GET /api/auth/google/callback - Callback de Google
+  router.get('/google/callback',
+    passport.authenticate('google', { 
+      session: false,
+      failureRedirect: '/?error=google_auth_failed'
+    }),
+    (req, res) => {
+      try {
+        // Generar JWT para el usuario autenticado
+        const token = jwt.sign(
+          { id: req.user.id, email: req.user.email, rol: req.user.rol },
+          process.env.JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        // Redirigir al frontend con el token
+        res.redirect(`/?token=${token}`);
+      } catch (err) {
+        console.error('Error generando token:', err);
+        res.redirect('/?error=token_generation_failed');
+      }
+    }
+  );
+} else {
+  // Rutas de fallback si Google OAuth no está configurado
+  router.get('/google', (req, res) => {
+    res.status(503).json({ error: 'Google OAuth no está configurado en este servidor' });
+  });
+  
+  router.get('/google/callback', (req, res) => {
+    res.redirect('/?error=google_oauth_not_configured');
+  });
+}
 
 module.exports = router;

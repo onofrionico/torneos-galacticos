@@ -7,7 +7,7 @@ Monolito Node.js + Express + PostgreSQL para la plataforma de torneos de pádel.
 - **Runtime:** Node.js 18+
 - **Framework:** Express 4
 - **Base de datos:** PostgreSQL (via `pg`)
-- **Auth:** JWT + bcryptjs
+- **Auth:** JWT + bcryptjs + Google OAuth 2.0 (Passport)
 - **Uploads:** Multer (videos e imágenes)
 - **Deploy:** Render (Web Service)
 
@@ -57,6 +57,17 @@ npm run db:seed
 npm run dev
 ```
 
+### Configurar Google OAuth (opcional)
+
+Para habilitar el login con Google, seguí las instrucciones en [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md).
+
+Necesitarás agregar estas variables a tu `.env`:
+```env
+GOOGLE_CLIENT_ID=tu-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=tu-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+```
+
 ## Deploy en Render
 
 ### 1. Base de datos PostgreSQL
@@ -82,6 +93,9 @@ npm run dev
 | `JWT_SECRET` | Un string largo y aleatorio |
 | `NODE_ENV` | `production` |
 | `MAX_FILE_SIZE_MB` | `100` |
+| `GOOGLE_CLIENT_ID` | Tu Client ID de Google OAuth (opcional) |
+| `GOOGLE_CLIENT_SECRET` | Tu Client Secret de Google OAuth (opcional) |
+| `GOOGLE_CALLBACK_URL` | `https://tu-app.onrender.com/api/auth/google/callback` (opcional) |
 
 4. **Disco persistente** (importante para videos):
    - En tu Web Service → **Disks** → Add Disk
@@ -106,6 +120,8 @@ El backend lo sirve automáticamente. En Render **no necesitás un Static Site s
 |--------|------|------|-------------|
 | POST | `/api/auth/register` | — | Registro de jugador |
 | POST | `/api/auth/login` | — | Login, devuelve JWT |
+| GET | `/api/auth/google` | — | Iniciar login con Google OAuth |
+| GET | `/api/auth/google/callback` | — | Callback de Google OAuth |
 | GET | `/api/auth/me` | ✅ | Perfil del usuario logueado |
 | PUT | `/api/auth/me` | ✅ | Actualizar perfil |
 

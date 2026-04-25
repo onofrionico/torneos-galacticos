@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
+const passport = require('./utils/passport');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +41,9 @@ const authLimiter = rateLimit({
 // ── Parsers ─────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// ── Passport ─────────────────────────────────────────────────────────────────
+app.use(passport.initialize());
 
 // ── Archivos estáticos ───────────────────────────────────────────────────────
 // Servir uploads (videos, imágenes)

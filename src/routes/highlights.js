@@ -55,12 +55,20 @@ router.post('/', authenticate, (req, res, next) => {
   req.uploadSubdir = 'highlights';
   next();
 }, uploadVideo.single('video'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se recibió video' });
-
-  const { titulo, descripcion, torneo_id, duracion_seg } = req.body;
+  const { titulo, descripcion, torneo_id, duracion_seg, youtube_url } = req.body;
   if (!titulo) return res.status(400).json({ error: 'El título es requerido' });
 
-  const videoUrl = `/uploads/highlights/${req.file.filename}`;
+  let videoUrl;
+  
+  // Si se proporciona una URL de YouTube, usarla
+  if (youtube_url) {
+    videoUrl = youtube_url;
+  } else if (req.file) {
+    // Si se sube un archivo, usar la ruta del archivo
+    videoUrl = `/uploads/highlights/${req.file.filename}`;
+  } else {
+    return res.status(400).json({ error: 'Debe proporcionar un video o una URL de YouTube' });
+  }
 
   try {
     const { rows: [highlight] } = await query(`
