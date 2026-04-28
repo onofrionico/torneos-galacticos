@@ -40,16 +40,24 @@ async function migrateProduction() {
     `);
     console.log('✅ Columna activo agregada\n');
 
-    // 3. Agregar columna pago_confirmado a inscripciones si no existe
-    console.log('3️⃣ Agregando columna pago_confirmado a inscripciones...');
+    // 3. Agregar columna cancha_id a torneos si no existe
+    console.log('3️⃣ Agregando columna cancha_id a torneos...');
+    await query(`
+      ALTER TABLE torneos 
+      ADD COLUMN IF NOT EXISTS cancha_id UUID REFERENCES canchas(id) ON DELETE SET NULL
+    `);
+    console.log('✅ Columna cancha_id agregada\n');
+
+    // 4. Agregar columna pago_confirmado a inscripciones si no existe
+    console.log('4️⃣ Agregando columna pago_confirmado a inscripciones...');
     await query(`
       ALTER TABLE inscripciones 
       ADD COLUMN IF NOT EXISTS pago_confirmado BOOLEAN NOT NULL DEFAULT false
     `);
     console.log('✅ Columna pago_confirmado agregada\n');
 
-    // 4. Agregar columnas de aprobación a highlights si no existen
-    console.log('4️⃣ Agregando columnas de aprobación a highlights...');
+    // 5. Agregar columnas de aprobación a highlights si no existen
+    console.log('5️⃣ Agregando columnas de aprobación a highlights...');
     await query(`
       ALTER TABLE highlights 
       ADD COLUMN IF NOT EXISTS estado_aprobacion VARCHAR(20) NOT NULL DEFAULT 'pendiente'
@@ -69,8 +77,8 @@ async function migrateProduction() {
     `);
     console.log('✅ Columnas de aprobación agregadas\n');
 
-    // 5. Marcar highlights existentes como aprobados
-    console.log('5️⃣ Actualizando highlights existentes...');
+    // 6. Marcar highlights existentes como aprobados
+    console.log('6️⃣ Actualizando highlights existentes...');
     const { rowCount } = await query(`
       UPDATE highlights 
       SET estado_aprobacion = 'aprobado',
@@ -79,8 +87,8 @@ async function migrateProduction() {
     `);
     console.log(`✅ ${rowCount} highlights actualizados a estado aprobado\n`);
 
-    // 6. Actualizar constraint de categorías
-    console.log('6️⃣ Actualizando constraint de categorías...');
+    // 7. Actualizar constraint de categorías
+    console.log('7️⃣ Actualizando constraint de categorías...');
     await query(`
       ALTER TABLE users 
       DROP CONSTRAINT IF EXISTS users_categoria_check
@@ -92,8 +100,8 @@ async function migrateProduction() {
     `);
     console.log('✅ Constraint de categorías actualizado\n');
 
-    // 7. Verificar que todo está correcto
-    console.log('7️⃣ Verificando migraciones...');
+    // 8. Verificar que todo está correcto
+    console.log('8️⃣ Verificando migraciones...');
     
     // Verificar tabla canchas
     const { rows: canchas } = await query(`
@@ -108,6 +116,13 @@ async function migrateProduction() {
       WHERE table_name = 'users' AND column_name = 'activo'
     `);
     console.log(`   Columna users.activo: ${activo[0].count > 0 ? '✅' : '❌'}`);
+
+    // Verificar columna cancha_id
+    const { rows: cancha } = await query(`
+      SELECT COUNT(*) as count FROM information_schema.columns 
+      WHERE table_name = 'torneos' AND column_name = 'cancha_id'
+    `);
+    console.log(`   Columna torneos.cancha_id: ${cancha[0].count > 0 ? '✅' : '❌'}`);
 
     // Verificar columna pago_confirmado
     const { rows: pago } = await query(`
@@ -127,6 +142,7 @@ async function migrateProduction() {
     console.log('📊 Resumen:');
     console.log('   - Tabla canchas creada');
     console.log('   - Columna activo agregada a users');
+    console.log('   - Columna cancha_id agregada a torneos');
     console.log('   - Columna pago_confirmado agregada a inscripciones');
     console.log('   - Columnas de aprobación agregadas a highlights');
     console.log('   - Highlights existentes marcados como aprobados');
