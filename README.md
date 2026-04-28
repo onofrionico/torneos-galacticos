@@ -23,6 +23,7 @@ torneos-galacticos/
 │   └── routes/
 │       ├── auth.js           # /api/auth
 │       ├── torneos.js        # /api/torneos
+│       ├── canchas.js        # /api/canchas
 │       ├── inscripciones.js  # /api/inscripciones
 │       ├── highlights.js     # /api/highlights
 │       └── ranking.js        # /api/ranking
@@ -129,11 +130,21 @@ El backend lo sirve automáticamente. En Render **no necesitás un Static Site s
 | Método | Ruta | Auth | Descripción |
 |--------|------|------|-------------|
 | GET | `/api/torneos` | — | Listar torneos (filtros: estado, tipo, categoria) |
-| GET | `/api/torneos/:id` | — | Detalle con inscripciones |
-| POST | `/api/torneos` | organizador | Crear torneo |
+| GET | `/api/torneos/:id` | — | Detalle con inscripciones y cancha |
+| POST | `/api/torneos` | organizador | Crear torneo (incluye cancha_id) |
 | PUT | `/api/torneos/:id` | organizador | Editar torneo |
 | DELETE | `/api/torneos/:id` | organizador | Eliminar torneo |
 | POST | `/api/torneos/:id/imagen` | organizador | Subir imagen |
+
+### Canchas
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | `/api/canchas` | — | Listar canchas (filtros: activa, ciudad, provincia) |
+| GET | `/api/canchas/:id` | — | Detalle con torneos asociados |
+| POST | `/api/canchas` | organizador | Crear cancha |
+| PUT | `/api/canchas/:id` | organizador | Editar cancha |
+| DELETE | `/api/canchas/:id` | admin | Eliminar cancha |
+| POST | `/api/canchas/:id/imagen` | organizador | Subir imagen |
 
 ### Inscripciones
 | Método | Ruta | Auth | Descripción |

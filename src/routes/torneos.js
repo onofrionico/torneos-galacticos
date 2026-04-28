@@ -20,12 +20,20 @@ router.get('/', async (req, res) => {
       SELECT
         t.*,
         u.nombre || ' ' || u.apellido AS organizador_nombre,
-        COUNT(i.id) FILTER (WHERE i.estado = 'confirmada') AS inscriptos
+        COUNT(i.id) FILTER (WHERE i.estado = 'confirmada') AS inscriptos,
+        json_build_object(
+          'id', c.id,
+          'nombre', c.nombre,
+          'direccion', c.direccion,
+          'ciudad', c.ciudad,
+          'provincia', c.provincia
+        ) AS cancha
       FROM torneos t
       JOIN users u ON u.id = t.organizador_id
       LEFT JOIN inscripciones i ON i.torneo_id = t.id
+      LEFT JOIN canchas c ON c.id = t.cancha_id
       WHERE ${conditions.join(' AND ')}
-      GROUP BY t.id, u.nombre, u.apellido
+      GROUP BY t.id, u.nombre, u.apellido, c.id, c.nombre, c.direccion, c.ciudad, c.provincia
       ORDER BY t.fecha_inicio ASC
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `, params);
@@ -52,6 +60,7 @@ router.get('/:id', async (req, res) => {
       SELECT
         t.*,
         u.nombre || ' ' || u.apellido AS organizador_nombre,
+        row_to_json(c.*) AS cancha,
         json_agg(
           json_build_object(
             'id', i.id,
@@ -63,16 +72,18 @@ router.get('/:id', async (req, res) => {
         ) FILTER (WHERE i.id IS NOT NULL) AS inscripciones
       FROM torneos t
       JOIN users u ON u.id = t.organizador_id
+      LEFT JOIN canchas c ON c.id = t.cancha_id
       LEFT JOIN inscripciones i ON i.torneo_id = t.id
       LEFT JOIN users u1 ON u1.id = i.jugador1_id
       LEFT JOIN users u2 ON u2.id = i.jugador2_id
       WHERE t.id = $1
-      GROUP BY t.id, u.nombre, u.apellido
+      GROUP BY t.id, u.nombre, u.apellido, c.id
     `, [req.params.id]);
 
     if (rows.length === 0) return res.status(404).json({ error: 'Torneo no encontrado' });
     res.json(rows[0]);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Error al obtener torneo' });
   }
 });
@@ -81,7 +92,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', authenticate, requireRole('organizador', 'admin'), async (req, res) => {
   const {
     nombre, descripcion, tipo, categoria,
-    fecha_inicio, fecha_fin, lugar,
+    fecha_inicio, fecha_fin, lugar, cancha_id,
     max_parejas = 16, precio_pareja = 0, estado = 'borrador'
   } = req.body;
 
@@ -92,10 +103,10 @@ router.post('/', authenticate, requireRole('organizador', 'admin'), async (req, 
   try {
     const { rows: [torneo] } = await query(`
       INSERT INTO torneos
-        (nombre, descripcion, tipo, categoria, fecha_inicio, fecha_fin, lugar, max_parejas, precio_pareja, estado, organizador_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (nombre, descripcion, tipo, categoria, fecha_inicio, fecha_fin, lugar, cancha_id, max_parejas, precio_pareja, estado, organizador_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       RETURNING *
-    `, [nombre, descripcion, tipo, categoria, fecha_inicio, fecha_fin, lugar, max_parejas, precio_pareja, estado, req.user.id]);
+    `, [nombre, descripcion, tipo, categoria, fecha_inicio, fecha_fin, lugar, cancha_id, max_parejas, precio_pareja, estado, req.user.id]);
 
     res.status(201).json(torneo);
   } catch (err) {
@@ -106,7 +117,7 @@ router.post('/', authenticate, requireRole('organizador', 'admin'), async (req, 
 
 // PUT /api/torneos/:id - editar torneo
 router.put('/:id', authenticate, requireRole('organizador', 'admin'), async (req, res) => {
-  const campos = ['nombre','descripcion','tipo','categoria','fecha_inicio','fecha_fin','lugar','max_parejas','precio_pareja','estado'];
+  const campos = ['nombre','descripcion','tipo','categoria','fecha_inicio','fecha_fin','lugar','cancha_id','max_parejas','precio_pareja','estado'];
   const updates = [];
   const params = [];
 

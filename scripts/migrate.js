@@ -17,10 +17,32 @@ const migrations = `
     rol           VARCHAR(20) NOT NULL DEFAULT 'jugador' CHECK (rol IN ('jugador', 'organizador', 'admin')),
     ranking_pts   INTEGER NOT NULL DEFAULT 0,
     categoria     VARCHAR(10) NOT NULL DEFAULT '5ta' CHECK (categoria IN ('1ra','2da','3ra','4ta','5ta','6ta','7ma','8va','9na')),
+    activo        BOOLEAN NOT NULL DEFAULT true,
     avatar_url    TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT password_or_google CHECK (password_hash IS NOT NULL OR google_id IS NOT NULL)
+  );
+
+  -- Canchas
+  CREATE TABLE IF NOT EXISTS canchas (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre          VARCHAR(200) NOT NULL,
+    direccion       VARCHAR(300) NOT NULL,
+    ciudad          VARCHAR(100),
+    provincia       VARCHAR(100),
+    telefono        VARCHAR(30),
+    email           VARCHAR(255),
+    cantidad_canchas INTEGER NOT NULL DEFAULT 1,
+    techadas        BOOLEAN NOT NULL DEFAULT false,
+    iluminacion     BOOLEAN NOT NULL DEFAULT false,
+    vestuarios      BOOLEAN NOT NULL DEFAULT false,
+    estacionamiento BOOLEAN NOT NULL DEFAULT false,
+    descripcion     TEXT,
+    imagen_url      TEXT,
+    activa          BOOLEAN NOT NULL DEFAULT true,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
   -- Torneos
@@ -33,6 +55,7 @@ const migrations = `
     fecha_inicio    DATE NOT NULL,
     fecha_fin       DATE NOT NULL,
     lugar           VARCHAR(200),
+    cancha_id       UUID REFERENCES canchas(id) ON DELETE SET NULL,
     max_parejas     INTEGER NOT NULL DEFAULT 16,
     precio_pareja   DECIMAL(10,2) NOT NULL DEFAULT 0,
     estado          VARCHAR(20) NOT NULL DEFAULT 'publicado'
@@ -52,6 +75,7 @@ const migrations = `
     jugador2_nombre VARCHAR(200),
     estado          VARCHAR(20) NOT NULL DEFAULT 'pendiente'
                     CHECK (estado IN ('pendiente','confirmada','cancelada')),
+    pago_confirmado BOOLEAN NOT NULL DEFAULT false,
     posicion_final  INTEGER,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (torneo_id, jugador1_id)
@@ -74,17 +98,21 @@ const migrations = `
 
   -- Highlights / Videos
   CREATE TABLE IF NOT EXISTS highlights (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    titulo          VARCHAR(200) NOT NULL,
-    descripcion     TEXT,
-    video_url       TEXT NOT NULL,
-    thumbnail_url   TEXT,
-    duracion_seg    INTEGER,
-    jugador_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    torneo_id       UUID REFERENCES torneos(id) ON DELETE SET NULL,
-    vistas          INTEGER NOT NULL DEFAULT 0,
-    visible         BOOLEAN NOT NULL DEFAULT true,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    titulo             VARCHAR(200) NOT NULL,
+    descripcion        TEXT,
+    video_url          TEXT NOT NULL,
+    thumbnail_url      TEXT,
+    duracion_seg       INTEGER,
+    jugador_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    torneo_id          UUID REFERENCES torneos(id) ON DELETE SET NULL,
+    vistas             INTEGER NOT NULL DEFAULT 0,
+    visible            BOOLEAN NOT NULL DEFAULT true,
+    estado_aprobacion  VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado_aprobacion IN ('pendiente', 'aprobado', 'rechazado')),
+    aprobado_por       UUID REFERENCES users(id) ON DELETE SET NULL,
+    fecha_aprobacion   TIMESTAMPTZ,
+    motivo_rechazo     TEXT,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
   -- Historial de ranking (snapshot mensual)
@@ -101,6 +129,8 @@ const migrations = `
   -- Índices para performance
   CREATE INDEX IF NOT EXISTS idx_torneos_estado     ON torneos(estado);
   CREATE INDEX IF NOT EXISTS idx_torneos_fechas     ON torneos(fecha_inicio, fecha_fin);
+  CREATE INDEX IF NOT EXISTS idx_torneos_cancha     ON torneos(cancha_id);
+  CREATE INDEX IF NOT EXISTS idx_canchas_activa     ON canchas(activa);
   CREATE INDEX IF NOT EXISTS idx_inscripciones_torneo ON inscripciones(torneo_id);
   CREATE INDEX IF NOT EXISTS idx_inscripciones_jugador ON inscripciones(jugador1_id);
   CREATE INDEX IF NOT EXISTS idx_highlights_jugador ON highlights(jugador_id);
@@ -114,6 +144,7 @@ const migrations = `
 
   DROP TRIGGER IF EXISTS trg_users_updated_at   ON users;
   DROP TRIGGER IF EXISTS trg_torneos_updated_at ON torneos;
+  DROP TRIGGER IF EXISTS trg_canchas_updated_at ON canchas;
 
   CREATE TRIGGER trg_users_updated_at
     BEFORE UPDATE ON users
@@ -121,6 +152,10 @@ const migrations = `
 
   CREATE TRIGGER trg_torneos_updated_at
     BEFORE UPDATE ON torneos
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+  CREATE TRIGGER trg_canchas_updated_at
+    BEFORE UPDATE ON canchas
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 `;
 

@@ -118,6 +118,31 @@ router.put('/me', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/auth/buscar-por-email?email=xxx - buscar usuario por email (autenticado)
+router.get('/buscar-por-email', authenticate, async (req, res) => {
+  const { email } = req.query;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email es requerido' });
+  }
+
+  try {
+    const { rows } = await query(`
+      SELECT id, nombre, apellido, email, categoria
+      FROM users WHERE email = $1
+    `, [email.toLowerCase()]);
+
+    if (rows.length === 0) {
+      return res.json({ encontrado: false });
+    }
+
+    res.json({ encontrado: true, usuario: rows[0] });
+  } catch (err) {
+    console.error('Error buscando usuario:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // GET /api/auth/google - Iniciar autenticación con Google (solo si está configurado)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   router.get('/google',

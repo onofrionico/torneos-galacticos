@@ -41,6 +41,7 @@ const auth = {
   login:    (data) => post('/auth/login', data),
   me:       ()     => get('/auth/me'),
   update:   (data) => put('/auth/me', data),
+  buscarPorEmail: (email) => get(`/auth/buscar-por-email?email=${encodeURIComponent(email)}`),
 
   saveSession(token_, user_) {
     token.set(token_);
@@ -73,11 +74,23 @@ const inscripciones = {
 
 // ── Highlights ────────────────────────────────────────────────────────────────
 const highlights = {
-  list:   (params = {}) => get('/highlights?' + new URLSearchParams(params)),
-  mios:   ()            => get('/highlights/mis-highlights'),
-  subir:  (formData)    => post('/highlights', formData, true),
-  vista:  (id)          => post(`/highlights/${id}/vista`),
-  borrar: (id)          => del(`/highlights/${id}`),
+  list:       (params = {}) => get('/highlights?' + new URLSearchParams(params)),
+  mios:       ()            => get('/highlights/mis-highlights'),
+  pendientes: ()            => get('/highlights/pendientes'),
+  subir:      (formData)    => post('/highlights', formData, true),
+  vista:      (id)          => post(`/highlights/${id}/vista`),
+  aprobar:    (id)          => post(`/highlights/${id}/aprobar`),
+  rechazar:   (id, motivo)  => post(`/highlights/${id}/rechazar`, { motivo }),
+  borrar:     (id)          => del(`/highlights/${id}`),
+};
+
+// ── Canchas ───────────────────────────────────────────────────────────────────
+const canchas = {
+  list:   (params = {}) => get('/canchas?' + new URLSearchParams(params)),
+  get:    (id)          => get(`/canchas/${id}`),
+  create: (data)        => post('/canchas', data),
+  update: (id, data)    => put(`/canchas/${id}`, data),
+  remove: (id)          => del(`/canchas/${id}`),
 };
 
 // ── Ranking ───────────────────────────────────────────────────────────────────
@@ -86,4 +99,18 @@ const ranking = {
   jugador: (id)          => get(`/ranking/jugador/${id}`),
 };
 
-window.API = { auth, torneos, inscripciones, highlights, ranking, token, user };
+// ── Admin ─────────────────────────────────────────────────────────────────────
+const admin = {
+  usuarios: {
+    listar:           ()                    => get('/admin/usuarios'),
+    detalle:          (id)                  => get(`/admin/usuarios/${id}`),
+    cambiarCategoria: (id, categoria)       => put(`/admin/usuarios/${id}/categoria`, { categoria }),
+    cambiarEstado:    (id, activo)          => put(`/admin/usuarios/${id}/estado`, { activo }),
+    cambiarRol:       (id, rol)             => put(`/admin/usuarios/${id}/rol`, { rol }),
+  },
+  inscripciones: {
+    confirmarPago: (id, pago_confirmado) => put(`/admin/inscripciones/${id}/pago`, { pago_confirmado }),
+  },
+};
+
+window.API = { auth, torneos, canchas, inscripciones, highlights, ranking, admin, token, user };

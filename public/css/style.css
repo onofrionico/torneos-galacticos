@@ -314,8 +314,148 @@ nav {
 @keyframes shimmer { 0%,100%{opacity:.5} 50%{opacity:1} }
 .loading-pulse { color:var(--text-muted); font-size:14px; padding:2rem; text-align:center; animation:shimmer 1.5s infinite; }
 
+/* ── Canchas ───────────────────────────────────────────────────────────────── */
+.canchas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1.2rem; margin-top:1.5rem; }
+.cancha-card { background:var(--card-bg); border:.5px solid var(--card-border); border-radius:var(--radius-lg); padding:1.2rem; transition:all .3s; cursor:pointer; position:relative; overflow:hidden; }
+.cancha-card:hover { border-color:var(--nebula-purple); box-shadow:0 6px 24px rgba(108,61,255,.2); transform:translateY(-3px); }
+.cancha-header { display:flex; align-items:start; gap:12px; margin-bottom:1rem; }
+.cancha-icon { width:48px; height:48px; background:linear-gradient(135deg,var(--nebula-purple),var(--nova-pink)); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+.cancha-info { flex:1; }
+.cancha-name { font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:4px; }
+.cancha-location { font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:4px; }
+.cancha-features { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:1rem; }
+.feature-badge { font-size:10px; padding:4px 8px; border-radius:6px; background:rgba(108,61,255,.15); color:var(--nebula-mid); border:.5px solid rgba(108,61,255,.3); letter-spacing:.04em; display:flex; align-items:center; gap:4px; }
+.cancha-stats { display:flex; gap:12px; padding-top:1rem; border-top:.5px solid var(--card-border); }
+.cancha-stat { flex:1; text-align:center; }
+.cancha-stat-value { font-size:18px; font-weight:700; color:var(--star-gold); }
+.cancha-stat-label { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+.cancha-inactive { opacity:.5; }
+.cancha-inactive::after { content:'INACTIVA'; position:absolute; top:12px; right:12px; font-size:9px; padding:4px 8px; border-radius:6px; background:rgba(255,107,157,.2); color:var(--nova-pink); border:.5px solid rgba(255,107,157,.4); letter-spacing:.06em; font-weight:700; }
+
+.cancha-detail-header { margin-bottom:1.5rem; }
+.cancha-detail-location { font-size:14px; color:var(--text-muted); margin-top:6px; display:flex; align-items:center; gap:6px; }
+.cancha-detail-features { display:flex; flex-wrap:wrap; gap:8px; margin:1rem 0; }
+.cancha-detail-info { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:1.5rem; }
+.cancha-detail-info-item { padding:12px; background:rgba(255,255,255,.04); border-radius:10px; border:.5px solid var(--card-border); }
+.cancha-detail-info-item label { display:block; font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+.cancha-detail-info-item span { font-size:16px; font-weight:600; }
+.cancha-detail-desc { font-size:13px; color:var(--text-muted); line-height:1.6; margin-bottom:1.5rem; padding:12px; background:rgba(255,255,255,.02); border-radius:10px; }
+.cancha-detail-map { width:100%; height:250px; border-radius:10px; overflow:hidden; margin-bottom:1.5rem; border:.5px solid var(--card-border); }
+.cancha-detail-torneos { margin-top:1.5rem; }
+.cancha-detail-torneos h4 { font-size:14px; color:var(--text-main); margin-bottom:12px; letter-spacing:.06em; }
+.cancha-torneo-item { padding:10px; background:rgba(255,255,255,.04); border-radius:8px; border:.5px solid var(--card-border); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+.cancha-torneo-info { flex:1; }
+.cancha-torneo-name { font-size:13px; font-weight:600; margin-bottom:2px; }
+.cancha-torneo-meta { font-size:11px; color:var(--text-muted); }
+.cancha-torneo-badge { font-size:10px; padding:4px 8px; border-radius:6px; background:rgba(108,61,255,.15); color:var(--nebula-mid); border:.5px solid rgba(108,61,255,.3); }
+
+/* ── Highlights Aprobación ─────────────────────────────────────────────────── */
+.highlight-card.pendiente { border:2px solid rgba(255,193,7,0.4); background:rgba(255,193,7,0.05); }
+.highlights-status { display:flex; gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+.status-item { flex:1; min-width:120px; padding:1rem; border-radius:var(--radius); text-align:center; }
+.status-item.aprobado { background:rgba(6,214,160,0.1); border:1px solid rgba(6,214,160,0.3); }
+.status-item.pendiente { background:rgba(255,193,7,0.1); border:1px solid rgba(255,193,7,0.3); }
+.status-item.rechazado { background:rgba(255,107,157,0.1); border:1px solid rgba(255,107,157,0.3); }
+.status-num { font-size:2rem; font-weight:700; font-family:'Orbitron',sans-serif; }
+.status-item.aprobado .status-num { color:var(--comet-cyan); }
+.status-item.pendiente .status-num { color:#ffc107; }
+.status-item.rechazado .status-num { color:var(--nova-pink); }
+.status-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
+
+.mis-highlights-list { display:flex; flex-direction:column; gap:10px; }
+.highlight-item { display:flex; justify-content:space-between; align-items:center; padding:1rem; border-radius:var(--radius); background:var(--card-bg); border:1px solid var(--card-border); }
+.highlight-item.pendiente { border-color:rgba(255,193,7,0.4); background:rgba(255,193,7,0.05); }
+.highlight-item.rechazado { border-color:rgba(255,107,157,0.4); background:rgba(255,107,157,0.05); }
+.highlight-item-info { flex:1; }
+.highlight-item-title { font-weight:600; font-size:14px; margin-bottom:4px; }
+.highlight-item-meta { font-size:12px; color:var(--text-muted); }
+.highlight-item-motivo { font-size:11px; color:var(--nova-pink); margin-top:6px; font-style:italic; }
+.highlight-item-estado { flex-shrink:0; }
+
+.badge-aprobado, .badge-pendiente, .badge-rechazado { 
+  font-size:11px; padding:4px 10px; border-radius:12px; font-weight:600; letter-spacing:.04em; 
+}
+.badge-aprobado { background:rgba(6,214,160,0.2); color:var(--comet-cyan); border:1px solid rgba(6,214,160,0.4); }
+.badge-pendiente { background:rgba(255,193,7,0.2); color:#ffc107; border:1px solid rgba(255,193,7,0.4); }
+.badge-rechazado { background:rgba(255,107,157,0.2); color:var(--nova-pink); border:1px solid rgba(255,107,157,0.4); }
+
+/* ── Admin Usuarios ────────────────────────────────────────────────────────── */
+.admin-usuarios-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(350px,1fr)); gap:1.5rem; }
+.admin-usuario-card { background:var(--card-bg); border:1px solid var(--card-border); border-radius:var(--radius); padding:1.5rem; transition:all .3s ease; }
+.admin-usuario-card:hover { border-color:var(--nebula-purple); transform:translateY(-2px); }
+.admin-usuario-card.usuario-inactivo { opacity:.6; border-color:rgba(255,107,157,0.4); }
+
+.usuario-header { display:flex; gap:1rem; margin-bottom:1rem; }
+.usuario-avatar { width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg,var(--nebula-purple),var(--nova-pink)); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; flex-shrink:0; }
+.usuario-info { flex:1; min-width:0; }
+.usuario-nombre { font-weight:600; font-size:16px; margin-bottom:4px; }
+.usuario-email { font-size:12px; color:var(--text-muted); margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; }
+.usuario-meta { display:flex; gap:6px; flex-wrap:wrap; }
+
+.badge-categoria, .badge-rol, .badge-inactivo, .badge-activo, .badge-pago-ok {
+  font-size:10px; padding:3px 8px; border-radius:8px; font-weight:600; letter-spacing:.04em;
+}
+.badge-categoria { background:rgba(108,61,255,0.2); color:var(--nebula-mid); border:1px solid rgba(108,61,255,0.4); }
+/* Categorías de pádel: degradado de verde (1ra) a púrpura (9na) */
+.badge-categoria.\31ra { background:rgba(6,214,160,0.3); color:var(--comet-cyan); border-color:rgba(6,214,160,0.5); } /* 1ra - Verde */
+.badge-categoria.\32da { background:rgba(6,214,160,0.25); color:var(--comet-cyan); border-color:rgba(6,214,160,0.45); } /* 2da */
+.badge-categoria.\33ra { background:rgba(255,193,7,0.25); color:#ffc107; border-color:rgba(255,193,7,0.45); } /* 3ra - Amarillo */
+.badge-categoria.\34ta { background:rgba(255,193,7,0.2); color:#ffc107; border-color:rgba(255,193,7,0.4); } /* 4ta */
+.badge-categoria.\35ta { background:rgba(255,152,0,0.2); color:#ff9800; border-color:rgba(255,152,0,0.4); } /* 5ta - Naranja */
+.badge-categoria.\36ta { background:rgba(255,107,157,0.2); color:var(--nova-pink); border-color:rgba(255,107,157,0.4); } /* 6ta - Rosa */
+.badge-categoria.\37ma { background:rgba(255,107,157,0.25); color:var(--nova-pink); border-color:rgba(255,107,157,0.45); } /* 7ma */
+.badge-categoria.\38va { background:rgba(108,61,255,0.25); color:var(--nebula-purple); border-color:rgba(108,61,255,0.5); } /* 8va - Púrpura */
+.badge-categoria.\39na { background:rgba(108,61,255,0.3); color:var(--nebula-purple); border-color:rgba(108,61,255,0.6); } /* 9na */
+.badge-rol.admin { background:rgba(255,107,157,0.2); color:var(--nova-pink); border:1px solid rgba(255,107,157,0.4); }
+.badge-rol.jugador { background:rgba(6,214,160,0.2); color:var(--comet-cyan); border:1px solid rgba(6,214,160,0.4); }
+.badge-inactivo { background:rgba(255,107,157,0.2); color:var(--nova-pink); border:1px solid rgba(255,107,157,0.4); }
+.badge-activo { background:rgba(6,214,160,0.2); color:var(--comet-cyan); border:1px solid rgba(6,214,160,0.4); }
+.badge-pago-ok { background:rgba(6,214,160,0.2); color:var(--comet-cyan); border:1px solid rgba(6,214,160,0.4); }
+
+.usuario-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:1rem; padding-top:1rem; border-top:.5px solid var(--card-border); }
+.stat-mini { text-align:center; }
+.stat-mini-num { font-size:20px; font-weight:700; font-family:'Orbitron',sans-serif; color:var(--star-gold); }
+.stat-mini-label { font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+.stat-mini.stat-warning .stat-mini-num { color:var(--nova-pink); }
+
+.usuario-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.btn-mini { font-size:11px; padding:6px 10px; border-radius:8px; border:none; cursor:pointer; font-weight:600; transition:all .2s ease; background:var(--card-bg); color:var(--text-main); border:1px solid var(--card-border); }
+.btn-mini:hover { background:var(--nebula-purple); border-color:var(--nebula-purple); transform:translateY(-1px); }
+.btn-mini.btn-danger { background:rgba(255,107,157,0.2); border-color:rgba(255,107,157,0.4); color:var(--nova-pink); }
+.btn-mini.btn-danger:hover { background:var(--nova-pink); color:white; }
+.btn-mini.btn-success { background:rgba(6,214,160,0.2); border-color:rgba(6,214,160,0.4); color:var(--comet-cyan); }
+.btn-mini.btn-success:hover { background:var(--comet-cyan); color:var(--space-black); }
+
+.usuario-detalle { max-height:70vh; overflow-y:auto; }
+.detalle-section { margin-bottom:2rem; }
+.detalle-section h4 { font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--nebula-mid); margin-bottom:1rem; border-bottom:1px solid var(--card-border); padding-bottom:8px; }
+.detalle-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+.detalle-grid > div { font-size:13px; }
+.detalle-grid strong { color:var(--text-muted); font-weight:600; margin-right:6px; }
+
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; }
+.stat-box { background:var(--card-bg); border:1px solid var(--card-border); border-radius:var(--radius); padding:1rem; text-align:center; }
+.stat-box-num { font-size:24px; font-weight:700; font-family:'Orbitron',sans-serif; color:var(--star-gold); }
+.stat-box-label { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
+.stat-box.stat-warning { border-color:rgba(255,107,157,0.4); }
+.stat-box.stat-warning .stat-box-num { color:var(--nova-pink); }
+
+.inscripciones-list { display:flex; flex-direction:column; gap:10px; }
+.inscripcion-item { display:flex; justify-content:space-between; align-items:center; padding:12px; background:var(--card-bg); border:1px solid var(--card-border); border-radius:var(--radius); }
+.inscripcion-item.pago-pendiente { border-color:rgba(255,193,7,0.4); background:rgba(255,193,7,0.05); }
+.inscripcion-info { flex:1; }
+.inscripcion-torneo { font-weight:600; font-size:13px; margin-bottom:4px; }
+.inscripcion-meta { font-size:11px; color:var(--text-muted); }
+.inscripcion-pago { flex-shrink:0; }
+
+.highlights-mini-list { display:flex; flex-direction:column; gap:8px; }
+.highlight-mini-item { display:flex; justify-content:space-between; align-items:center; padding:10px; background:var(--card-bg); border:1px solid var(--card-border); border-radius:8px; font-size:12px; }
+.highlight-mini-meta { font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:6px; }
+
 /* ── Misc ──────────────────────────────────────────────────────────────────── */
 .text-muted { color:var(--text-muted); font-size:14px; }
+.text-muted a { color:var(--nebula-mid); text-decoration:underline; cursor:pointer; }
+.text-muted a:hover { color:var(--nebula-purple); }
 .empty-state { text-align:center; padding:3rem 1rem; color:var(--text-muted); }
 .empty-icon { font-size:3rem; margin-bottom:1rem; }
 .empty-state p { margin-bottom:1.5rem; }

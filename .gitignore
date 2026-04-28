@@ -5,3 +5,26 @@ public/uploads/*
 *.log
 .DS_Store
 dist/
+
+# Scripts de migración temporal (solo para DBs existentes)
+scripts/add-*.js
+scripts/fix-*.js
+scripts/check-*.js
+
+# Documentación de fixes temporales
+FIX-*.md
+CORRECCION-*.md
+RESUMEN-*.md
+TEST-*.md
+MIGRACION-*.md
+PRUEBA-*.md
+ARCHIVOS-PARA-COMMIT.md
+
+# Archivos de prueba
+test-*.html
+
+# Scripts de desarrollo
+*.ps1
+
+# Configuración de IDE
+.superpowers/

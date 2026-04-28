@@ -76,9 +76,11 @@ app.use(express.static(publicDir));
 // ── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth',          authLimiter, require('./routes/auth'));
 app.use('/api/torneos',       require('./routes/torneos'));
+app.use('/api/canchas',       require('./routes/canchas'));
 app.use('/api/inscripciones', require('./routes/inscripciones'));
 app.use('/api/highlights',    require('./routes/highlights'));
 app.use('/api/ranking',       require('./routes/ranking'));
+app.use('/api/admin',         require('./routes/admin-usuarios'));
 
 // Health check - Render lo usa para detectar que el servicio está vivo
 app.get('/api/health', (req, res) => {

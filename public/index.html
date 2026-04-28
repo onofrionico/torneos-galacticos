@@ -28,9 +28,11 @@
     <div class="nav-links">
       <button class="nav-btn ghost" data-page="inicio"     onclick="showPage('inicio')">Inicio</button>
       <button class="nav-btn ghost" data-page="torneos"    onclick="showPage('torneos')">Torneos</button>
+      <button class="nav-btn ghost" data-page="canchas"    onclick="showPage('canchas')">Canchas</button>
       <button class="nav-btn ghost" data-page="historial"  onclick="showPage('historial')">Mi Historial</button>
       <button class="nav-btn ghost" data-page="highlights" onclick="showPage('highlights')">Highlights</button>
       <button class="nav-btn ghost" data-page="ranking"    onclick="showPage('ranking')">Ranking</button>
+      <button class="nav-btn ghost" data-page="admin" id="nav-admin-btn" onclick="showPage('admin')" style="display:none;">⚙️ Admin</button>
     </div>
     <div id="nav-auth" style="display:flex;gap:6px;">
       <button class="nav-btn ghost"   onclick="openModal('modal-login')">Ingresar</button>
@@ -97,6 +99,27 @@
     <div id="torneos-grid" class="tournaments-grid"></div>
   </div>
 
+  <!-- CANCHAS -->
+  <div class="page" id="page-canchas">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+      <div class="section-title" style="margin:0;">Canchas Disponibles</div>
+      <button class="nav-btn primary" id="btn-crear-cancha" onclick="abrirFormCancha()" style="display:none;">+ Nueva Cancha</button>
+    </div>
+    <div class="filters-row">
+      <select class="filter-select" id="filter-cancha-ciudad">
+        <option value="">Todas las ciudades</option>
+      </select>
+      <select class="filter-select" id="filter-cancha-provincia">
+        <option value="">Todas las provincias</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;">
+        <input type="checkbox" id="filter-cancha-activa" checked style="width:18px;height:18px;">
+        Solo activas
+      </label>
+    </div>
+    <div id="canchas-grid" class="canchas-grid"></div>
+  </div>
+
   <!-- HISTORIAL -->
   <div class="page" id="page-historial">
     <div id="historial-content"></div>
@@ -104,6 +127,13 @@
 
   <!-- HIGHLIGHTS -->
   <div class="page" id="page-highlights">
+    <!-- Sección de pendientes (solo admin) -->
+    <div id="admin-highlights-pendientes" style="display:none;">
+      <div class="section-title">⏳ Highlights Pendientes de Aprobación</div>
+      <div id="highlights-pendientes-grid" class="highlights-grid"></div>
+      <div style="margin:2rem 0;border-top:1px solid rgba(255,255,255,0.1);"></div>
+    </div>
+    
     <div class="section-title">Highlights de la Comunidad</div>
     <div id="highlights-grid" class="highlights-grid"></div>
     <div class="upload-zone" onclick="abrirSubirHighlight()">
@@ -130,6 +160,12 @@
       </select>
     </div>
     <div id="ranking-tabla"></div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="page" id="page-admin">
+    <div class="section-title">⚙️ Administración de Usuarios</div>
+    <div id="admin-usuarios-grid" class="admin-usuarios-grid"></div>
   </div>
 
 </div>
@@ -234,9 +270,30 @@
     <h3>Inscripción · <span id="insc-torneo-nombre"></span></h3>
     <form id="form-inscripcion">
       <input type="hidden" id="insc-torneo-id" />
+      <input type="hidden" id="insc-jugador2-id" />
       <div class="form-group">
-        <label>Nombre de tu compañero/a</label>
-        <input type="text" id="insc-compañero" placeholder="Ej: Lucas Pérez" required />
+        <label>Email de tu compañero/a</label>
+        <input type="email" id="insc-email" placeholder="email@ejemplo.com" />
+        <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">
+          Ingresá el email para buscar si está registrado
+        </small>
+      </div>
+      <div id="insc-resultado-busqueda" style="margin-bottom:1rem;display:none;">
+        <div id="insc-usuario-encontrado" style="padding:10px;background:rgba(52,168,83,0.1);border:1px solid rgba(52,168,83,0.3);border-radius:8px;display:none;">
+          <div style="color:#34a853;font-weight:600;margin-bottom:4px;">✓ Usuario encontrado</div>
+          <div id="insc-usuario-info" style="color:#fff;font-size:14px;"></div>
+        </div>
+        <div id="insc-usuario-no-encontrado" style="padding:10px;background:rgba(251,188,5,0.1);border:1px solid rgba(251,188,5,0.3);border-radius:8px;display:none;">
+          <div style="color:#fbbc05;font-weight:600;margin-bottom:4px;">⚠ Usuario no registrado</div>
+          <div style="color:var(--text-muted);font-size:13px;">Se enviará un email de invitación para que se registre</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>O ingresá el nombre manualmente (opcional)</label>
+        <input type="text" id="insc-compañero" placeholder="Ej: Lucas Pérez" />
+        <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">
+          Solo si no conocés el email de tu compañero/a
+        </small>
       </div>
       <div class="modal-btns">
         <button type="button" class="btn-cancel" onclick="closeModal('modal-inscripcion')">Cancelar</button>
@@ -281,6 +338,94 @@
   </div>
 </div>
 
+<!-- MODAL DETALLE CANCHA -->
+<div class="modal-overlay" id="modal-cancha-detalle">
+  <div class="modal" style="max-width:600px;">
+    <h3 id="cancha-detail-title">🏟️ Detalle de Cancha</h3>
+    <div id="cancha-detail-content"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('modal-cancha-detalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CREAR/EDITAR CANCHA -->
+<div class="modal-overlay" id="modal-cancha-form">
+  <div class="modal" style="max-width:600px;">
+    <h3 id="cancha-form-title">🏟️ Nueva Cancha</h3>
+    <form id="form-cancha">
+      <input type="hidden" id="cancha-id" />
+      <div class="form-group">
+        <label>Nombre del complejo *</label>
+        <input type="text" id="cancha-nombre" placeholder="Ej: Club Luján" required />
+      </div>
+      <div class="form-group">
+        <label>Dirección *</label>
+        <input type="text" id="cancha-direccion" placeholder="Ej: Av. Libertador 1234" required />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Ciudad</label>
+          <input type="text" id="cancha-ciudad" placeholder="Ej: Luján" />
+        </div>
+        <div class="form-group">
+          <label>Provincia</label>
+          <input type="text" id="cancha-provincia" placeholder="Ej: Buenos Aires" />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input type="tel" id="cancha-telefono" placeholder="02323-123456" />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="cancha-email" placeholder="info@club.com" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cantidad de canchas</label>
+        <input type="number" id="cancha-cantidad" min="1" value="1" />
+      </div>
+      <div class="form-group">
+        <label>Características</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+          <label style="display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;text-transform:none;">
+            <input type="checkbox" id="cancha-techadas" style="width:18px;height:18px;">
+            🏠 Techadas
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;text-transform:none;">
+            <input type="checkbox" id="cancha-iluminacion" style="width:18px;height:18px;">
+            💡 Iluminación
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;text-transform:none;">
+            <input type="checkbox" id="cancha-vestuarios" style="width:18px;height:18px;">
+            🚿 Vestuarios
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;text-transform:none;">
+            <input type="checkbox" id="cancha-estacionamiento" style="width:18px;height:18px;">
+            🚗 Estacionamiento
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descripción</label>
+        <textarea id="cancha-descripcion" placeholder="Descripción del complejo deportivo..." rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;text-transform:none;">
+          <input type="checkbox" id="cancha-activa" checked style="width:18px;height:18px;">
+          Cancha activa
+        </label>
+      </div>
+      <div class="modal-btns">
+        <button type="button" class="btn-cancel" onclick="closeModal('modal-cancha-form')">Cancelar</button>
+        <button type="submit" class="btn-confirm" id="cancha-form-btn">Guardar Cancha 🚀</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="/js/api.js"></script>
@@ -318,5 +463,53 @@
   const _origLoadInicio = loadInicio;
   window.loadInicio = function() { loadStats(); return _origLoadInicio(); };
 </script>
+
+<!-- MODAL DETALLE USUARIO (ADMIN) -->
+<div class="modal-overlay" id="modal-usuario-detalle">
+  <div class="modal" style="max-width:800px;">
+    <h3 id="usuario-detail-title">👤 Detalle de Usuario</h3>
+    <div id="usuario-detail-content"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('modal-usuario-detalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CAMBIAR CATEGORÍA (ADMIN) -->
+<div class="modal-overlay" id="modal-cambiar-categoria">
+  <div class="modal" style="max-width:400px;">
+    <h3>📊 Cambiar Categoría</h3>
+    <form id="form-cambiar-categoria">
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" id="cat-usuario-nombre" readonly style="background:#1a1a2e;cursor:not-allowed;" />
+      </div>
+      <div class="form-group">
+        <label>Categoría Actual</label>
+        <input type="text" id="cat-actual" readonly style="background:#1a1a2e;cursor:not-allowed;" />
+      </div>
+      <div class="form-group">
+        <label>Nueva Categoría</label>
+        <select id="cat-nueva" class="filter-select" required>
+          <option value="">Seleccionar...</option>
+          <option value="1ra">1ra</option>
+          <option value="2da">2da</option>
+          <option value="3ra">3ra</option>
+          <option value="4ta">4ta</option>
+          <option value="5ta">5ta</option>
+          <option value="6ta">6ta</option>
+          <option value="7ma">7ma</option>
+          <option value="8va">8va</option>
+          <option value="9na">9na</option>
+        </select>
+      </div>
+      <div class="modal-btns">
+        <button type="button" class="btn-cancel" onclick="closeModal('modal-cambiar-categoria')">Cancelar</button>
+        <button type="submit" class="btn-confirm">Cambiar Categoría</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 </body>
 </html>

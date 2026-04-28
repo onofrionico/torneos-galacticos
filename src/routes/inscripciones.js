@@ -4,11 +4,11 @@ const { authenticate, requireRole } = require('../middleware/auth');
 
 // POST /api/inscripciones - inscribirse a un torneo
 router.post('/', authenticate, async (req, res) => {
-  const { torneo_id, jugador2_id, jugador2_nombre } = req.body;
+  const { torneo_id, jugador2_id, jugador2_nombre, jugador2_email } = req.body;
 
   if (!torneo_id) return res.status(400).json({ error: 'torneo_id es requerido' });
-  if (!jugador2_id && !jugador2_nombre) {
-    return res.status(400).json({ error: 'Indicá el compañero/a (id o nombre)' });
+  if (!jugador2_id && !jugador2_email && !jugador2_nombre) {
+    return res.status(400).json({ error: 'Indicá el email o nombre del compañero/a' });
   }
 
   try {
@@ -37,13 +37,40 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(409).json({ error: 'Ya estás inscripto en este torneo' });
     }
 
+    let finalJugador2Id = jugador2_id;
+    let finalJugador2Nombre = jugador2_nombre;
+    let mensajeAdicional = '';
+
+    // Si se proporcionó email, buscar al usuario
+    if (jugador2_email) {
+      const { rows: usuarioEncontrado } = await query(
+        'SELECT id, nombre, apellido FROM users WHERE email = $1',
+        [jugador2_email.toLowerCase()]
+      );
+
+      if (usuarioEncontrado.length > 0) {
+        // Usuario encontrado, usar su ID
+        finalJugador2Id = usuarioEncontrado[0].id;
+        finalJugador2Nombre = `${usuarioEncontrado[0].nombre} ${usuarioEncontrado[0].apellido}`;
+      } else {
+        // Usuario no encontrado, enviar email de invitación
+        // TODO: Implementar envío de email de confirmación
+        mensajeAdicional = ` Se enviará un email de confirmación a ${jugador2_email} para que se registre.`;
+        finalJugador2Nombre = jugador2_email; // Guardar el email temporalmente
+      }
+    }
+
     const { rows: [inscripcion] } = await query(`
       INSERT INTO inscripciones (torneo_id, jugador1_id, jugador2_id, jugador2_nombre, estado)
       VALUES ($1, $2, $3, $4, 'confirmada')
       RETURNING *
-    `, [torneo_id, req.user.id, jugador2_id || null, jugador2_nombre || null]);
+    `, [torneo_id, req.user.id, finalJugador2Id || null, finalJugador2Nombre || null]);
 
-    res.status(201).json({ mensaje: '¡Inscripción confirmada!', inscripcion });
+    res.status(201).json({ 
+      mensaje: '¡Inscripción confirmada!' + mensajeAdicional, 
+      inscripcion,
+      requiere_confirmacion: jugador2_email && !finalJugador2Id
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al procesar inscripción' });

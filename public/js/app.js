@@ -3,6 +3,7 @@
 // ── Estado global ─────────────────────────────────────────────────────────────
 const state = {
   torneos: [],
+  canchas: [],
   highlights: [],
   historial: [],
   ranking: [],
@@ -89,10 +90,12 @@ function showPage(id) {
 
   const loaders = {
     torneos:    loadTorneos,
+    canchas:    loadCanchas,
     historial:  loadHistorial,
     highlights: loadHighlights,
     ranking:    loadRanking,
     inicio:     loadInicio,
+    admin:      loadAdminUsuarios,
   };
   loaders[id]?.();
   window.scrollTo(0, 0);
@@ -104,14 +107,31 @@ function updateNavAuth() {
   state.currentUser = u;
   const navAuth = document.getElementById('nav-auth');
   const navUser = document.getElementById('nav-user');
+  const btnCrearCancha = document.getElementById('btn-crear-cancha');
 
   if (u) {
     navAuth.style.display = 'none';
     navUser.style.display = 'flex';
     document.getElementById('nav-username').textContent = u.nombre;
+    
+    // Mostrar botón de crear cancha solo a organizadores/admins
+    if (btnCrearCancha && ['organizador', 'admin'].includes(u.rol)) {
+      btnCrearCancha.style.display = 'block';
+    }
+    
+    // Mostrar botón de admin solo a administradores
+    const navAdminBtn = document.getElementById('nav-admin-btn');
+    if (navAdminBtn) {
+      navAdminBtn.style.display = u.rol === 'admin' ? 'block' : 'none';
+    }
   } else {
     navAuth.style.display = 'flex';
     navUser.style.display = 'none';
+    
+    // Ocultar botón de admin
+    const navAdminBtn = document.getElementById('nav-admin-btn');
+    if (navAdminBtn) navAdminBtn.style.display = 'none';
+    if (btnCrearCancha) btnCrearCancha.style.display = 'none';
   }
 }
 
@@ -350,22 +370,93 @@ function iniciarInscripcion(torneoId, torneoNombre) {
   }
   document.getElementById('insc-torneo-nombre').textContent = torneoNombre;
   document.getElementById('insc-torneo-id').value = torneoId;
-  document.getElementById('insc-compañero').value  = '';
+  document.getElementById('insc-email').value = '';
+  document.getElementById('insc-compañero').value = '';
+  document.getElementById('insc-jugador2-id').value = '';
+  document.getElementById('insc-resultado-busqueda').style.display = 'none';
+  document.getElementById('insc-usuario-encontrado').style.display = 'none';
+  document.getElementById('insc-usuario-no-encontrado').style.display = 'none';
+  
+  // Agregar listener para búsqueda en tiempo real
+  const emailInput = document.getElementById('insc-email');
+  emailInput.removeEventListener('blur', buscarParejaEmail); // Remover listener anterior
+  emailInput.addEventListener('blur', buscarParejaEmail);
+  
   openModal('modal-inscripcion');
+}
+
+async function buscarParejaEmail() {
+  const email = document.getElementById('insc-email').value.trim();
+  const resultadoDiv = document.getElementById('insc-resultado-busqueda');
+  const encontradoDiv = document.getElementById('insc-usuario-encontrado');
+  const noEncontradoDiv = document.getElementById('insc-usuario-no-encontrado');
+  const jugador2IdInput = document.getElementById('insc-jugador2-id');
+  
+  if (!email) {
+    resultadoDiv.style.display = 'none';
+    jugador2IdInput.value = '';
+    return;
+  }
+  
+  // Validar formato de email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    resultadoDiv.style.display = 'none';
+    return;
+  }
+  
+  try {
+    const resultado = await API.auth.buscarPorEmail(email);
+    resultadoDiv.style.display = 'block';
+    
+    if (resultado.encontrado) {
+      const usuario = resultado.usuario;
+      encontradoDiv.style.display = 'block';
+      noEncontradoDiv.style.display = 'none';
+      document.getElementById('insc-usuario-info').textContent = 
+        `${usuario.nombre} ${usuario.apellido} - ${usuario.categoria} categoría`;
+      jugador2IdInput.value = usuario.id;
+    } else {
+      encontradoDiv.style.display = 'none';
+      noEncontradoDiv.style.display = 'block';
+      jugador2IdInput.value = '';
+    }
+  } catch (err) {
+    console.error('Error buscando usuario:', err);
+    resultadoDiv.style.display = 'none';
+  }
 }
 
 async function handleInscripcion(e) {
   e.preventDefault();
-  const torneo_id      = document.getElementById('insc-torneo-id').value;
-  const jugador2_nombre = document.getElementById('insc-compañero').value;
+  const torneo_id = document.getElementById('insc-torneo-id').value;
+  const jugador2_email = document.getElementById('insc-email').value.trim();
+  const jugador2_nombre = document.getElementById('insc-compañero').value.trim();
+  const jugador2_id = document.getElementById('insc-jugador2-id').value;
   const btn = document.getElementById('insc-btn');
+
+  // Validar que se haya ingresado email o nombre
+  if (!jugador2_email && !jugador2_nombre) {
+    showToast('Ingresá el email o nombre de tu compañero/a', 'error');
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = 'Inscribiendo...';
   try {
-    await API.inscripciones.inscribirse({ torneo_id, jugador2_nombre });
+    const data = { torneo_id };
+    
+    if (jugador2_id) {
+      data.jugador2_id = jugador2_id;
+    } else if (jugador2_email) {
+      data.jugador2_email = jugador2_email;
+    } else if (jugador2_nombre) {
+      data.jugador2_nombre = jugador2_nombre;
+    }
+    
+    const response = await API.inscripciones.inscribirse(data);
     closeModal('modal-inscripcion');
-    showToast('¡Inscripción confirmada! 🚀');
+    showToast(response.mensaje || '¡Inscripción confirmada! 🚀');
     loadTorneos();
   } catch (err) {
     showToast(err.message, 'error');
@@ -390,14 +481,19 @@ async function loadHistorial() {
   document.getElementById('historial-content').innerHTML = '<div class="loading-pulse">Cargando historial...</div>';
 
   try {
-    const [perfil, historial] = await Promise.all([
+    const [perfil, historial, misHighlights] = await Promise.all([
       API.auth.me(),
       API.inscripciones.mias(),
+      API.highlights.mios(),
     ]);
 
     const campeonatos   = historial.filter(h => h.posicion_final === 1).length;
     const subcampeonatos = historial.filter(h => h.posicion_final === 2).length;
     const terceros      = historial.filter(h => h.posicion_final === 3).length;
+    
+    const highlightsAprobados = misHighlights.filter(h => h.estado_aprobacion === 'aprobado').length;
+    const highlightsPendientes = misHighlights.filter(h => h.estado_aprobacion === 'pendiente').length;
+    const highlightsRechazados = misHighlights.filter(h => h.estado_aprobacion === 'rechazado').length;
 
     document.getElementById('historial-content').innerHTML = `
       <div class="historial-header">
@@ -419,6 +515,50 @@ async function loadHistorial() {
         <div class="trophy-chip"><span class="trophy-icon">🎾</span><div class="trophy-info"><strong>${historial.length} Participaciones</strong></div></div>
         ${campeonatos > 0 ? '<div class="trophy-chip"><span class="trophy-icon">🚀</span><div class="trophy-info"><strong>Galáctico</strong>Campeón activo</div></div>' : ''}
       </div>
+
+      <div class="section-title">Mis Highlights</div>
+      ${misHighlights.length === 0
+        ? '<p class="text-muted">Aún no subiste ningún highlight. <a onclick="showPage(\'highlights\')">¡Subí tu primer video!</a></p>'
+        : `<div class="highlights-status">
+            <div class="status-item aprobado">
+              <div class="status-num">${highlightsAprobados}</div>
+              <div class="status-label">✓ Aprobados</div>
+            </div>
+            ${highlightsPendientes > 0 ? `
+              <div class="status-item pendiente">
+                <div class="status-num">${highlightsPendientes}</div>
+                <div class="status-label">⏳ Pendientes</div>
+              </div>
+            ` : ''}
+            ${highlightsRechazados > 0 ? `
+              <div class="status-item rechazado">
+                <div class="status-num">${highlightsRechazados}</div>
+                <div class="status-label">✗ Rechazados</div>
+              </div>
+            ` : ''}
+          </div>
+          <div class="mis-highlights-list">
+            ${misHighlights.map(h => `
+              <div class="highlight-item ${h.estado_aprobacion}">
+                <div class="highlight-item-info">
+                  <div class="highlight-item-title">${h.titulo}</div>
+                  <div class="highlight-item-meta">
+                    ${h.torneo_nombre || 'Sin torneo'} · ${formatDate(h.created_at)}
+                    ${h.estado_aprobacion === 'aprobado' ? ` · ${h.vistas} vistas` : ''}
+                  </div>
+                  ${h.estado_aprobacion === 'rechazado' && h.motivo_rechazo ? `
+                    <div class="highlight-item-motivo">Motivo: ${h.motivo_rechazo}</div>
+                  ` : ''}
+                </div>
+                <div class="highlight-item-estado">
+                  ${h.estado_aprobacion === 'aprobado' ? '<span class="badge-aprobado">✓ Aprobado</span>' : ''}
+                  ${h.estado_aprobacion === 'pendiente' ? '<span class="badge-pendiente">⏳ Pendiente</span>' : ''}
+                  ${h.estado_aprobacion === 'rechazado' ? '<span class="badge-rechazado">✗ Rechazado</span>' : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>`
+      }
 
       <div class="section-title">Historial de Torneos</div>
       ${historial.length === 0
@@ -456,6 +596,16 @@ function timelineItemHTML(h) {
 // ── HIGHLIGHTS ────────────────────────────────────────────────────────────────
 async function loadHighlights() {
   showLoading('#highlights-grid', 3);
+  
+  // Si es admin, cargar también los pendientes
+  const currentUser = API.auth.currentUser();
+  if (currentUser && currentUser.rol === 'admin') {
+    document.getElementById('admin-highlights-pendientes').style.display = 'block';
+    loadHighlightsPendientes();
+  } else {
+    document.getElementById('admin-highlights-pendientes').style.display = 'none';
+  }
+  
   try {
     const data = await API.highlights.list();
     state.highlights = data;
@@ -463,6 +613,54 @@ async function loadHighlights() {
   } catch (err) {
     document.querySelector('#highlights-grid').innerHTML =
       '<p class="text-muted">Error al cargar highlights.</p>';
+  }
+}
+
+async function loadHighlightsPendientes() {
+  const el = document.querySelector('#highlights-pendientes-grid');
+  if (!el) return;
+  
+  el.innerHTML = '<p class="text-muted">Cargando...</p>';
+  
+  try {
+    const pendientes = await API.highlights.pendientes();
+    if (!pendientes.length) {
+      el.innerHTML = '<p class="text-muted">No hay highlights pendientes de aprobación</p>';
+      return;
+    }
+    
+    el.innerHTML = pendientes.map((h, i) => {
+      const isYouTube = isYouTubeUrl(h.video_url);
+      const youtubeId = isYouTube ? extractYouTubeId(h.video_url) : null;
+      
+      return `
+      <div class="highlight-card pendiente">
+        ${isYouTube && youtubeId ? `
+          <div class="highlight-thumb youtube-thumb">
+            <img src="https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg" alt="${h.titulo}" />
+            <div class="play-btn">▶</div>
+          </div>
+        ` : `
+          <div class="highlight-thumb hl-${(i % 3) + 1}">
+            🏸
+            <div class="play-btn">▶</div>
+          </div>
+        `}
+        <div class="hl-meta">
+          <div class="hl-title">${h.titulo}</div>
+          <div class="hl-sub">${h.jugador_nombre} (${h.jugador_email})${h.torneo_nombre ? ' · ' + h.torneo_nombre : ''}</div>
+          <div class="hl-views">📅 ${formatDate(h.created_at)}</div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="btn-confirm" style="flex:1;padding:6px;font-size:12px;" onclick="aprobarHighlight('${h.id}', ${isYouTube}, '${youtubeId || ''}', '${h.video_url}', '${h.titulo.replace(/'/g, "\\'")}')">✓ Aprobar</button>
+            <button class="btn-cancel" style="flex:1;padding:6px;font-size:12px;" onclick="rechazarHighlight('${h.id}')">✗ Rechazar</button>
+            <button class="btn-cancel" style="padding:6px 12px;font-size:12px;" onclick="openHighlightModal('${h.id}', ${isYouTube}, '${youtubeId || ''}', '${h.video_url}', '${h.titulo.replace(/'/g, "\\'")}')">👁️</button>
+          </div>
+        </div>
+      </div>
+    `;
+    }).join('');
+  } catch (err) {
+    el.innerHTML = '<p class="text-muted">Error al cargar highlights pendientes</p>';
   }
 }
 
@@ -604,9 +802,9 @@ async function handleSubirHighlight(e) {
   btn.textContent = 'Subiendo...';
 
   try {
-    await API.highlights.subir(formData);
+    const response = await API.highlights.subir(formData);
     closeModal('modal-highlight');
-    showToast('¡Highlight subido con éxito! 🎬');
+    showToast(response.mensaje || '¡Highlight subido con éxito! 🎬');
     loadHighlights();
     // Resetear formulario
     document.getElementById('form-highlight').reset();
@@ -632,6 +830,269 @@ function abrirSubirHighlight() {
       torneos.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
   }).catch(() => {});
   openModal('modal-highlight');
+}
+
+// ── CANCHAS ───────────────────────────────────────────────────────────────────
+async function loadCanchas() {
+  showLoading('#canchas-grid', 6);
+  try {
+    const activa = document.getElementById('filter-cancha-activa')?.checked;
+    const ciudad = document.getElementById('filter-cancha-ciudad')?.value || '';
+    const provincia = document.getElementById('filter-cancha-provincia')?.value || '';
+    
+    const params = { limit: 50 };
+    if (activa !== undefined) params.activa = activa;
+    if (ciudad) params.ciudad = ciudad;
+    if (provincia) params.provincia = provincia;
+    
+    const { canchas } = await API.canchas.list(params);
+    state.canchas = canchas;
+    renderCanchas(canchas);
+    
+    // Poblar filtros de ciudad y provincia
+    const ciudades = [...new Set(canchas.map(c => c.ciudad).filter(Boolean))].sort();
+    const provincias = [...new Set(canchas.map(c => c.provincia).filter(Boolean))].sort();
+    
+    const selCiudad = document.getElementById('filter-cancha-ciudad');
+    const selProvincia = document.getElementById('filter-cancha-provincia');
+    
+    if (selCiudad && ciudades.length) {
+      selCiudad.innerHTML = '<option value="">Todas las ciudades</option>' +
+        ciudades.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+    
+    if (selProvincia && provincias.length) {
+      selProvincia.innerHTML = '<option value="">Todas las provincias</option>' +
+        provincias.map(p => `<option value="${p}">${p}</option>`).join('');
+    }
+  } catch (err) {
+    document.querySelector('#canchas-grid').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">🏟️</div><p>Error al cargar canchas</p></div>';
+  }
+}
+
+function renderCanchas(canchas) {
+  const grid = document.querySelector('#canchas-grid');
+  if (!grid) return;
+  
+  if (!canchas.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🏟️</div><p>No se encontraron canchas</p></div>';
+    return;
+  }
+  
+  grid.innerHTML = canchas.map(c => {
+    const features = [];
+    if (c.techadas) features.push({ icon: '🏠', text: 'Techadas' });
+    if (c.iluminacion) features.push({ icon: '💡', text: 'Iluminación' });
+    if (c.vestuarios) features.push({ icon: '🚿', text: 'Vestuarios' });
+    if (c.estacionamiento) features.push({ icon: '🚗', text: 'Estacionamiento' });
+    
+    const location = [c.ciudad, c.provincia].filter(Boolean).join(', ') || 'Sin ubicación';
+    const torneosActivos = c.torneos_activos || 0;
+    
+    return `
+      <div class="cancha-card ${!c.activa ? 'cancha-inactive' : ''}" onclick="verDetalleCancha('${c.id}')">
+        <div class="cancha-header">
+          <div class="cancha-icon">🏟️</div>
+          <div class="cancha-info">
+            <div class="cancha-name">${c.nombre}</div>
+            <div class="cancha-location">📍 ${location}</div>
+          </div>
+        </div>
+        ${features.length ? `
+          <div class="cancha-features">
+            ${features.map(f => `<span class="feature-badge">${f.icon} ${f.text}</span>`).join('')}
+          </div>
+        ` : ''}
+        <div class="cancha-stats">
+          <div class="cancha-stat">
+            <div class="cancha-stat-value">${c.cantidad_canchas}</div>
+            <div class="cancha-stat-label">Canchas</div>
+          </div>
+          <div class="cancha-stat">
+            <div class="cancha-stat-value">${torneosActivos}</div>
+            <div class="cancha-stat-label">Torneos</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function verDetalleCancha(id) {
+  try {
+    const cancha = await API.canchas.get(id);
+    mostrarDetalleCancha(cancha);
+  } catch (err) {
+    showToast('Error al cargar detalle de cancha', 'error');
+  }
+}
+
+function mostrarDetalleCancha(cancha) {
+  document.getElementById('cancha-detail-title').textContent = `🏟️ ${cancha.nombre}`;
+  
+  const features = [];
+  if (cancha.techadas) features.push({ icon: '🏠', text: 'Techadas' });
+  if (cancha.iluminacion) features.push({ icon: '💡', text: 'Iluminación' });
+  if (cancha.vestuarios) features.push({ icon: '🚿', text: 'Vestuarios' });
+  if (cancha.estacionamiento) features.push({ icon: '🚗', text: 'Estacionamiento' });
+  
+  const location = [cancha.direccion, cancha.ciudad, cancha.provincia].filter(Boolean).join(', ');
+  const direccionEncoded = encodeURIComponent(location);
+  
+  let torneosHTML = '';
+  if (cancha.torneos && cancha.torneos.length > 0) {
+    torneosHTML = `
+      <div class="cancha-detail-torneos">
+        <h4>Torneos en esta cancha (${cancha.torneos.length})</h4>
+        ${cancha.torneos.map(t => `
+          <div class="cancha-torneo-item">
+            <div class="cancha-torneo-info">
+              <div class="cancha-torneo-name">${t.nombre}</div>
+              <div class="cancha-torneo-meta">
+                ${formatDate(t.fecha_inicio)} - ${formatDate(t.fecha_fin)} · ${t.tipo} · ${t.categoria}
+              </div>
+            </div>
+            <span class="cancha-torneo-badge">${t.estado}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  document.getElementById('cancha-detail-content').innerHTML = `
+    <div class="cancha-detail-header">
+      <div class="cancha-detail-location">📍 ${location}</div>
+      ${cancha.telefono ? `<div class="cancha-detail-location">📞 ${cancha.telefono}</div>` : ''}
+      ${cancha.email ? `<div class="cancha-detail-location">✉️ ${cancha.email}</div>` : ''}
+    </div>
+    
+    ${features.length ? `
+      <div class="cancha-detail-features">
+        ${features.map(f => `<span class="feature-badge">${f.icon} ${f.text}</span>`).join('')}
+      </div>
+    ` : ''}
+    
+    <div class="cancha-detail-info">
+      <div class="cancha-detail-info-item">
+        <label>Cantidad de canchas</label>
+        <span>${cancha.cantidad_canchas}</span>
+      </div>
+      <div class="cancha-detail-info-item">
+        <label>Estado</label>
+        <span>${cancha.activa ? '✅ Activa' : '❌ Inactiva'}</span>
+      </div>
+    </div>
+    
+    ${cancha.descripcion ? `
+      <div class="cancha-detail-desc">${cancha.descripcion}</div>
+    ` : ''}
+    
+    <div class="cancha-detail-map">
+      <iframe
+        width="100%"
+        height="100%"
+        frameborder="0"
+        style="border:0"
+        referrerpolicy="no-referrer-when-downgrade"
+        src="https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${direccionEncoded}"
+        allowfullscreen>
+      </iframe>
+    </div>
+    
+    ${torneosHTML}
+  `;
+  
+  openModal('modal-cancha-detalle');
+}
+
+function abrirFormCancha(canchaId = null) {
+  if (!API.auth.isLoggedIn()) {
+    showToast('Iniciá sesión para gestionar canchas', 'info');
+    openModal('modal-login');
+    return;
+  }
+  
+  const user = API.auth.currentUser();
+  if (!['organizador', 'admin'].includes(user.rol)) {
+    showToast('Solo organizadores y admins pueden crear canchas', 'error');
+    return;
+  }
+  
+  // Resetear formulario
+  document.getElementById('form-cancha').reset();
+  document.getElementById('cancha-id').value = '';
+  document.getElementById('cancha-form-title').textContent = '🏟️ Nueva Cancha';
+  document.getElementById('cancha-form-btn').textContent = 'Crear Cancha 🚀';
+  
+  // Si es edición, cargar datos
+  if (canchaId) {
+    API.canchas.get(canchaId).then(cancha => {
+      document.getElementById('cancha-id').value = cancha.id;
+      document.getElementById('cancha-nombre').value = cancha.nombre;
+      document.getElementById('cancha-direccion').value = cancha.direccion || '';
+      document.getElementById('cancha-ciudad').value = cancha.ciudad || '';
+      document.getElementById('cancha-provincia').value = cancha.provincia || '';
+      document.getElementById('cancha-telefono').value = cancha.telefono || '';
+      document.getElementById('cancha-email').value = cancha.email || '';
+      document.getElementById('cancha-cantidad').value = cancha.cantidad_canchas || 1;
+      document.getElementById('cancha-techadas').checked = cancha.techadas || false;
+      document.getElementById('cancha-iluminacion').checked = cancha.iluminacion || false;
+      document.getElementById('cancha-vestuarios').checked = cancha.vestuarios || false;
+      document.getElementById('cancha-estacionamiento').checked = cancha.estacionamiento || false;
+      document.getElementById('cancha-descripcion').value = cancha.descripcion || '';
+      document.getElementById('cancha-activa').checked = cancha.activa !== false;
+      
+      document.getElementById('cancha-form-title').textContent = '🏟️ Editar Cancha';
+      document.getElementById('cancha-form-btn').textContent = 'Guardar Cambios 🚀';
+    }).catch(err => {
+      showToast('Error al cargar cancha', 'error');
+    });
+  }
+  
+  openModal('modal-cancha-form');
+}
+
+async function handleGuardarCancha(e) {
+  e.preventDefault();
+  
+  const id = document.getElementById('cancha-id').value;
+  const data = {
+    nombre: document.getElementById('cancha-nombre').value,
+    direccion: document.getElementById('cancha-direccion').value,
+    ciudad: document.getElementById('cancha-ciudad').value,
+    provincia: document.getElementById('cancha-provincia').value,
+    telefono: document.getElementById('cancha-telefono').value,
+    email: document.getElementById('cancha-email').value,
+    cantidad_canchas: parseInt(document.getElementById('cancha-cantidad').value),
+    techadas: document.getElementById('cancha-techadas').checked,
+    iluminacion: document.getElementById('cancha-iluminacion').checked,
+    vestuarios: document.getElementById('cancha-vestuarios').checked,
+    estacionamiento: document.getElementById('cancha-estacionamiento').checked,
+    descripcion: document.getElementById('cancha-descripcion').value,
+    activa: document.getElementById('cancha-activa').checked,
+  };
+  
+  const btn = document.getElementById('cancha-form-btn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  
+  try {
+    if (id) {
+      await API.canchas.update(id, data);
+      showToast('Cancha actualizada exitosamente', 'success');
+    } else {
+      await API.canchas.create(data);
+      showToast('Cancha creada exitosamente', 'success');
+    }
+    closeModal('modal-cancha-form');
+    loadCanchas();
+  } catch (err) {
+    showToast(err.message || 'Error al guardar cancha', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = id ? 'Guardar Cambios 🚀' : 'Crear Cancha 🚀';
+  }
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────────
@@ -688,6 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('form-register')?.addEventListener('submit', handleRegister);
   document.getElementById('form-inscripcion')?.addEventListener('submit', handleInscripcion);
   document.getElementById('form-highlight')?.addEventListener('submit', handleSubirHighlight);
+  document.getElementById('form-cancha')?.addEventListener('submit', handleGuardarCancha);
 
   // Cerrar modales al hacer click en overlay
   document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', closeOnOverlay));
@@ -697,6 +1159,285 @@ document.addEventListener('DOMContentLoaded', () => {
     sel.addEventListener('change', () => {
       if (document.getElementById('page-torneos')?.classList.contains('active')) loadTorneos();
       if (document.getElementById('page-ranking')?.classList.contains('active')) loadRanking();
+      if (document.getElementById('page-canchas')?.classList.contains('active')) loadCanchas();
     });
   });
+  
+  // Filtro checkbox de canchas activas
+  document.getElementById('filter-cancha-activa')?.addEventListener('change', () => {
+    if (document.getElementById('page-canchas')?.classList.contains('active')) loadCanchas();
+  });
 });
+
+// ── APROBACIÓN DE HIGHLIGHTS (ADMIN) ──────────────────────────────────────────
+async function aprobarHighlight(id, isYouTube, youtubeId, videoUrl, titulo) {
+  // Primero mostrar el video para revisión
+  const confirmar = confirm(`¿Aprobar el highlight "${titulo}"?\n\nEsto lo hará visible para todos los usuarios.`);
+  if (!confirmar) return;
+  
+  try {
+    const response = await API.highlights.aprobar(id);
+    showToast(response.mensaje || 'Highlight aprobado correctamente', 'success');
+    loadHighlights(); // Recarga tanto pendientes como aprobados
+  } catch (err) {
+    showToast(err.message || 'Error al aprobar highlight', 'error');
+  }
+}
+
+async function rechazarHighlight(id) {
+  const motivo = prompt('Motivo del rechazo (opcional):');
+  if (motivo === null) return; // Usuario canceló
+  
+  try {
+    const response = await API.highlights.rechazar(id, motivo);
+    showToast(response.mensaje || 'Highlight rechazado', 'info');
+    loadHighlights(); // Recarga tanto pendientes como aprobados
+  } catch (err) {
+    showToast(err.message || 'Error al rechazar highlight', 'error');
+  }
+}
+
+// ── ADMINISTRACIÓN DE USUARIOS ────────────────────────────────────────────────
+async function loadAdminUsuarios() {
+  const currentUser = API.auth.currentUser();
+  if (!currentUser || currentUser.rol !== 'admin') {
+    document.getElementById('admin-usuarios-grid').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔒</div>
+        <p>Solo administradores pueden acceder a esta sección</p>
+      </div>`;
+    return;
+  }
+
+  const el = document.getElementById('admin-usuarios-grid');
+  el.innerHTML = '<div class="loading-pulse">Cargando usuarios...</div>';
+
+  try {
+    const usuarios = await API.admin.usuarios.listar();
+    
+    if (!usuarios.length) {
+      el.innerHTML = '<p class="text-muted">No hay usuarios registrados</p>';
+      return;
+    }
+
+    el.innerHTML = usuarios.map(u => `
+      <div class="admin-usuario-card ${!u.activo ? 'usuario-inactivo' : ''}">
+        <div class="usuario-header">
+          <div class="usuario-avatar">${u.nombre[0]}${u.apellido[0]}</div>
+          <div class="usuario-info">
+            <div class="usuario-nombre">${u.nombre} ${u.apellido}</div>
+            <div class="usuario-email">${u.email}</div>
+            <div class="usuario-meta">
+              <span class="badge-categoria ${u.categoria.toLowerCase()}">${u.categoria}</span>
+              <span class="badge-rol ${u.rol}">${u.rol}</span>
+              ${!u.activo ? '<span class="badge-inactivo">Inactivo</span>' : ''}
+            </div>
+          </div>
+        </div>
+        
+        <div class="usuario-stats">
+          <div class="stat-mini">
+            <div class="stat-mini-num">${u.ranking_pts}</div>
+            <div class="stat-mini-label">Puntos</div>
+          </div>
+          <div class="stat-mini">
+            <div class="stat-mini-num">${u.total_torneos || 0}</div>
+            <div class="stat-mini-label">Torneos</div>
+          </div>
+          <div class="stat-mini">
+            <div class="stat-mini-num">${u.torneos_ganados || 0}</div>
+            <div class="stat-mini-label">Ganados</div>
+          </div>
+          <div class="stat-mini ${parseInt(u.pagos_pendientes) > 0 ? 'stat-warning' : ''}">
+            <div class="stat-mini-num">${u.pagos_pendientes || 0}</div>
+            <div class="stat-mini-label">Pagos Pend.</div>
+          </div>
+        </div>
+
+        <div class="usuario-actions">
+          <button class="btn-mini" onclick="verDetalleUsuario('${u.id}')">👁️ Ver Detalle</button>
+          <button class="btn-mini" onclick="cambiarCategoriaUsuario('${u.id}', '${u.nombre} ${u.apellido}', '${u.categoria}')">📊 Categoría</button>
+          <button class="btn-mini ${u.activo ? 'btn-danger' : 'btn-success'}" onclick="toggleEstadoUsuario('${u.id}', ${u.activo}, '${u.nombre} ${u.apellido}')">
+            ${u.activo ? '🚫 Deshabilitar' : '✅ Habilitar'}
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    el.innerHTML = '<p class="text-muted">Error al cargar usuarios</p>';
+    showToast(err.message || 'Error al cargar usuarios', 'error');
+  }
+}
+
+async function verDetalleUsuario(id) {
+  try {
+    const data = await API.admin.usuarios.detalle(id);
+    const { usuario, inscripciones, highlights, estadisticas } = data;
+
+    document.getElementById('usuario-detail-title').textContent = 
+      `👤 ${usuario.nombre} ${usuario.apellido}`;
+
+    document.getElementById('usuario-detail-content').innerHTML = `
+      <div class="usuario-detalle">
+        <div class="detalle-section">
+          <h4>Información Personal</h4>
+          <div class="detalle-grid">
+            <div><strong>Email:</strong> ${usuario.email}</div>
+            <div><strong>Teléfono:</strong> ${usuario.telefono || 'No especificado'}</div>
+            <div><strong>Categoría:</strong> <span class="badge-categoria ${usuario.categoria.toLowerCase()}">${usuario.categoria}</span></div>
+            <div><strong>Rol:</strong> <span class="badge-rol ${usuario.rol}">${usuario.rol}</span></div>
+            <div><strong>Puntos Ranking:</strong> ${usuario.ranking_pts}</div>
+            <div><strong>Estado:</strong> ${usuario.activo ? '<span class="badge-activo">Activo</span>' : '<span class="badge-inactivo">Inactivo</span>'}</div>
+            <div><strong>Registro:</strong> ${formatDate(usuario.created_at)}</div>
+          </div>
+        </div>
+
+        <div class="detalle-section">
+          <h4>Estadísticas</h4>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-box-num">${estadisticas.total_torneos}</div>
+              <div class="stat-box-label">Torneos Totales</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-num">${estadisticas.torneos_ganados}</div>
+              <div class="stat-box-label">Campeonatos</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-num">${estadisticas.pagos_confirmados}</div>
+              <div class="stat-box-label">Pagos OK</div>
+            </div>
+            <div class="stat-box ${estadisticas.pagos_pendientes > 0 ? 'stat-warning' : ''}">
+              <div class="stat-box-num">${estadisticas.pagos_pendientes}</div>
+              <div class="stat-box-label">Pagos Pendientes</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-num">${estadisticas.highlights_aprobados}</div>
+              <div class="stat-box-label">Highlights</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="detalle-section">
+          <h4>Inscripciones (${inscripciones.length})</h4>
+          ${inscripciones.length === 0 ? '<p class="text-muted">Sin inscripciones</p>' : `
+            <div class="inscripciones-list">
+              ${inscripciones.map(i => `
+                <div class="inscripcion-item ${!i.pago_confirmado ? 'pago-pendiente' : ''}">
+                  <div class="inscripcion-info">
+                    <div class="inscripcion-torneo">${i.torneo_nombre}</div>
+                    <div class="inscripcion-meta">
+                      ${i.compañero_nombre ? `Pareja: ${i.compañero_nombre} · ` : ''}
+                      ${formatDate(i.fecha_inicio)}
+                      ${i.posicion_final ? ` · Posición: ${i.posicion_final}` : ''}
+                    </div>
+                  </div>
+                  <div class="inscripcion-pago">
+                    ${i.pago_confirmado 
+                      ? '<span class="badge-pago-ok">✓ Pago OK</span>' 
+                      : `<button class="btn-mini btn-success" onclick="confirmarPagoInscripcion('${i.id}')">Confirmar Pago</button>`
+                    }
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <div class="detalle-section">
+          <h4>Highlights (${highlights.length})</h4>
+          ${highlights.length === 0 ? '<p class="text-muted">Sin highlights</p>' : `
+            <div class="highlights-mini-list">
+              ${highlights.map(h => `
+                <div class="highlight-mini-item">
+                  <div>${h.titulo}</div>
+                  <div class="highlight-mini-meta">
+                    ${h.torneo_nombre || 'Sin torneo'} · ${h.vistas} vistas
+                    ${h.estado_aprobacion === 'aprobado' ? '<span class="badge-aprobado">✓</span>' : ''}
+                    ${h.estado_aprobacion === 'pendiente' ? '<span class="badge-pendiente">⏳</span>' : ''}
+                    ${h.estado_aprobacion === 'rechazado' ? '<span class="badge-rechazado">✗</span>' : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+
+    openModal('modal-usuario-detalle');
+  } catch (err) {
+    showToast(err.message || 'Error al cargar detalle del usuario', 'error');
+  }
+}
+
+function cambiarCategoriaUsuario(id, nombre, categoriaActual) {
+  // Llenar el modal con los datos
+  document.getElementById('cat-usuario-nombre').value = nombre;
+  document.getElementById('cat-actual').value = categoriaActual;
+  document.getElementById('cat-nueva').value = '';
+  
+  // Abrir modal
+  openModal('modal-cambiar-categoria');
+  
+  // Manejar submit del formulario
+  const form = document.getElementById('form-cambiar-categoria');
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    
+    const nuevaCategoria = document.getElementById('cat-nueva').value;
+    
+    if (!nuevaCategoria) {
+      showToast('Seleccioná una categoría', 'error');
+      return;
+    }
+    
+    if (nuevaCategoria === categoriaActual) {
+      showToast('La categoría es la misma', 'info');
+      closeModal('modal-cambiar-categoria');
+      return;
+    }
+    
+    try {
+      const response = await API.admin.usuarios.cambiarCategoria(id, nuevaCategoria);
+      showToast(response.mensaje, 'success');
+      closeModal('modal-cambiar-categoria');
+      loadAdminUsuarios();
+    } catch (err) {
+      showToast(err.message || 'Error al cambiar categoría', 'error');
+    }
+  };
+}
+
+async function toggleEstadoUsuario(id, estadoActual, nombre) {
+  const accion = estadoActual ? 'deshabilitar' : 'habilitar';
+  const confirmar = confirm(`¿Seguro que querés ${accion} a ${nombre}?`);
+  if (!confirmar) return;
+
+  try {
+    const response = await API.admin.usuarios.cambiarEstado(id, !estadoActual);
+    showToast(response.mensaje, 'success');
+    loadAdminUsuarios();
+  } catch (err) {
+    showToast(err.message || 'Error al cambiar estado', 'error');
+  }
+}
+
+async function confirmarPagoInscripcion(inscripcionId) {
+  const confirmar = confirm('¿Confirmar el pago de esta inscripción?');
+  if (!confirmar) return;
+
+  try {
+    const response = await API.admin.inscripciones.confirmarPago(inscripcionId, true);
+    showToast(response.mensaje, 'success');
+    // Recargar el detalle del usuario si está abierto
+    const modal = document.getElementById('modal-usuario-detalle');
+    if (modal.classList.contains('open')) {
+      // Buscar el ID del usuario desde el título del modal o recargar la lista
+      loadAdminUsuarios();
+      closeModal('modal-usuario-detalle');
+    }
+  } catch (err) {
+    showToast(err.message || 'Error al confirmar pago', 'error');
+  }
+}

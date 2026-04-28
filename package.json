@@ -7,6 +7,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "db:migrate": "node scripts/migrate.js",
+    "db:add-canchas": "node scripts/add-canchas.js",
     "db:seed": "node scripts/seed.js",
     "db:reset": "node scripts/reset-database.js"
   },
