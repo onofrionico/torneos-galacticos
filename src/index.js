@@ -15,8 +15,23 @@ app.set('trust proxy', 1);
 
 // ── Seguridad y CORS ────────────────────────────────────────────────────────
 app.use(helmet({
-  contentSecurityPolicy: false, // se configura manualmente si hace falta
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://www.google.com", "https://*.youtube.com"],
+      scriptSrcAttr: ["'unsafe-inline'"], // Permite event handlers inline (onclick, etc.)
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      frameSrc: ["'self'", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://accounts.google.com", "https://*.youtube.com"],
+      connectSrc: ["'self'", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://accounts.google.com", "https://*.youtube.com"],
+      mediaSrc: ["'self'", "https:", "http:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+    },
+  },
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
 }));
 
 app.use(cors({

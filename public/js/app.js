@@ -517,10 +517,11 @@ function openHighlightModal(id, isYouTube, youtubeId, videoUrl, titulo) {
             <iframe 
               width="100%" 
               height="450" 
-              src="https://www.youtube.com/embed/${youtubeId}?autoplay=1" 
+              src="https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1" 
               frameborder="0" 
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
               allowfullscreen
+              referrerpolicy="strict-origin-when-cross-origin"
             ></iframe>
           ` : `
             <video controls autoplay style="width:100%;border-radius:var(--radius);">
