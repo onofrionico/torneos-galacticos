@@ -9,6 +9,9 @@ const passport = require('./utils/passport');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Evita respuestas 304 por ETag en endpoints (puede romper fetch del frontend)
+app.set('etag', false);
+
 // ── Trust proxy (necesario para Render y otros proxies) ────────────────────
 // Esto permite que Express confíe en los headers X-Forwarded-* del proxy
 app.set('trust proxy', 1);
