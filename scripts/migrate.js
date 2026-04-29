@@ -17,6 +17,7 @@ const migrations = `
     rol           VARCHAR(20) NOT NULL DEFAULT 'jugador' CHECK (rol IN ('jugador', 'organizador', 'admin')),
     ranking_pts   INTEGER NOT NULL DEFAULT 0,
     categoria     VARCHAR(10) NOT NULL DEFAULT '5ta' CHECK (categoria IN ('1ra','2da','3ra','4ta','5ta','6ta','7ma','8va','9na')),
+    lado_preferencia VARCHAR(10) NOT NULL DEFAULT 'ambos' CHECK (lado_preferencia IN ('drive','reves','ambos')),
     activo        BOOLEAN NOT NULL DEFAULT true,
     avatar_url    TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -73,6 +74,8 @@ const migrations = `
     jugador1_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     jugador2_id     UUID REFERENCES users(id) ON DELETE SET NULL,
     jugador2_nombre VARCHAR(200),
+    jugador1_lado   VARCHAR(10) CHECK (jugador1_lado IN ('drive','reves')),
+    jugador2_lado   VARCHAR(10) CHECK (jugador2_lado IN ('drive','reves')),
     estado          VARCHAR(20) NOT NULL DEFAULT 'pendiente'
                     CHECK (estado IN ('pendiente','confirmada','cancelada')),
     pago_confirmado BOOLEAN NOT NULL DEFAULT false,
@@ -80,6 +83,21 @@ const migrations = `
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (torneo_id, jugador1_id)
   );
+
+  -- Alteraciones idempotentes (por si la DB ya existía)
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS lado_preferencia VARCHAR(10) NOT NULL DEFAULT 'ambos';
+  DO $$ BEGIN
+    ALTER TABLE users ADD CONSTRAINT users_lado_preferencia_check CHECK (lado_preferencia IN ('drive','reves','ambos'));
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+  ALTER TABLE inscripciones ADD COLUMN IF NOT EXISTS jugador1_lado VARCHAR(10);
+  ALTER TABLE inscripciones ADD COLUMN IF NOT EXISTS jugador2_lado VARCHAR(10);
+  DO $$ BEGIN
+    ALTER TABLE inscripciones ADD CONSTRAINT inscripciones_jugador1_lado_check CHECK (jugador1_lado IN ('drive','reves'));
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  DO $$ BEGIN
+    ALTER TABLE inscripciones ADD CONSTRAINT inscripciones_jugador2_lado_check CHECK (jugador2_lado IN ('drive','reves'));
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
   -- Resultados de partidos
   CREATE TABLE IF NOT EXISTS partidos (

@@ -61,6 +61,13 @@ router.get('/:id', async (req, res) => {
         t.*,
         u.nombre || ' ' || u.apellido AS organizador_nombre,
         row_to_json(c.*) AS cancha,
+        (
+          SELECT COUNT(*)
+          FROM inscripciones ip
+          WHERE ip.torneo_id = t.id
+            AND ip.estado = 'pendiente'
+            AND ip.jugador2_id IS NULL
+        ) AS inscripciones_pendientes_sin_pareja,
         json_agg(
           json_build_object(
             'id', i.id,

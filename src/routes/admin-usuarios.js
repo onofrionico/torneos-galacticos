@@ -13,6 +13,50 @@ function requireAdmin(req, res, next) {
 // GET /api/admin/usuarios - Listar todos los usuarios con sus estadísticas
 router.get('/usuarios', authenticate, requireAdmin, async (req, res) => {
   try {
+    const { q = '', categoria = '', rol = '', activo = '', deuda = '', page = 1, limit = 24 } = req.query;
+    const safeLimit = Math.min(parseInt(limit, 10) || 24, 100);
+    const safePage = parseInt(page, 10) || 1;
+    const offset = (safePage - 1) * safeLimit;
+
+    const conditions = ['1=1'];
+    const params = [];
+
+    if (q) {
+      params.push(`%${String(q).trim()}%`);
+      conditions.push(`(u.nombre ILIKE $${params.length} OR u.apellido ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
+    }
+    if (categoria) {
+      params.push(categoria);
+      conditions.push(`u.categoria = $${params.length}`);
+    }
+    if (rol) {
+      params.push(rol);
+      conditions.push(`u.rol = $${params.length}`);
+    }
+    if (activo !== '') {
+      const bool = String(activo) === 'true';
+      params.push(bool);
+      conditions.push(`u.activo = $${params.length}`);
+    }
+
+    if (deuda === 'con_deuda') {
+      conditions.push(`(
+        SELECT COUNT(*)
+        FROM inscripciones i_deuda
+        WHERE (i_deuda.jugador1_id = u.id OR i_deuda.jugador2_id = u.id)
+          AND i_deuda.estado <> 'cancelada'
+          AND i_deuda.pago_confirmado = false
+      ) > 0`);
+    } else if (deuda === 'al_dia') {
+      conditions.push(`(
+        SELECT COUNT(*)
+        FROM inscripciones i_deuda
+        WHERE (i_deuda.jugador1_id = u.id OR i_deuda.jugador2_id = u.id)
+          AND i_deuda.estado <> 'cancelada'
+          AND i_deuda.pago_confirmado = false
+      ) = 0`);
+    }
+
     const { rows } = await query(`
       SELECT 
         u.id,
@@ -21,21 +65,29 @@ router.get('/usuarios', authenticate, requireAdmin, async (req, res) => {
         u.email,
         u.telefono,
         u.categoria,
+        u.lado_preferencia,
         u.ranking_pts,
         u.activo,
         u.rol,
         u.created_at,
         COUNT(DISTINCT i.id) as total_torneos,
         COUNT(DISTINCT CASE WHEN i.posicion_final = 1 THEN i.id END) as torneos_ganados,
-        COUNT(DISTINCT CASE WHEN i.pago_confirmado = true THEN i.id END) as pagos_confirmados,
-        COUNT(DISTINCT CASE WHEN i.pago_confirmado = false THEN i.id END) as pagos_pendientes
+        COUNT(DISTINCT CASE WHEN i.estado <> 'cancelada' AND i.pago_confirmado = true THEN i.id END) as pagos_confirmados,
+        COUNT(DISTINCT CASE WHEN i.estado <> 'cancelada' AND i.pago_confirmado = false THEN i.id END) as pagos_pendientes
       FROM users u
       LEFT JOIN inscripciones i ON i.jugador1_id = u.id OR i.jugador2_id = u.id
+      WHERE ${conditions.join(' AND ')}
       GROUP BY u.id
       ORDER BY u.created_at DESC
-    `);
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `, [...params, safeLimit, offset]);
+
+    const { rows: [{ total }] } = await query(
+      `SELECT COUNT(*)::int AS total FROM users u WHERE ${conditions.join(' AND ')}`,
+      params
+    );
     
-    res.json(rows);
+    res.json({ usuarios: rows, total, page: safePage, limit: safeLimit });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener usuarios' });
@@ -49,7 +101,7 @@ router.get('/usuarios/:id', authenticate, requireAdmin, async (req, res) => {
     const { rows: [usuario] } = await query(`
       SELECT 
         id, nombre, apellido, email, telefono, 
-        categoria, ranking_pts, activo, rol, created_at
+        categoria, lado_preferencia, ranking_pts, activo, rol, created_at
       FROM users 
       WHERE id = $1
     `, [req.params.id]);

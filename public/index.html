@@ -165,7 +165,38 @@
   <!-- ADMIN -->
   <div class="page" id="page-admin">
     <div class="section-title">⚙️ Administración de Usuarios</div>
+    <div class="filters-row" id="admin-usuarios-filters">
+      <input class="filter-select" id="admin-q" placeholder="Buscar por nombre, apellido o email" />
+      <select class="filter-select" id="admin-cat">
+        <option value="">Todas las categorías</option>
+        <option value="1ra">1ra</option>
+        <option value="2da">2da</option>
+        <option value="3ra">3ra</option>
+        <option value="4ta">4ta</option>
+        <option value="5ta">5ta</option>
+        <option value="6ta">6ta</option>
+        <option value="7ma">7ma</option>
+        <option value="8va">8va</option>
+        <option value="9na">9na</option>
+      </select>
+      <select class="filter-select" id="admin-rol">
+        <option value="">Todos los roles</option>
+        <option value="jugador">Jugador</option>
+        <option value="admin">Admin</option>
+      </select>
+      <select class="filter-select" id="admin-activo">
+        <option value="">Todos</option>
+        <option value="true">Activos</option>
+        <option value="false">Inactivos</option>
+      </select>
+      <select class="filter-select" id="admin-deuda">
+        <option value="">Deuda: Todos</option>
+        <option value="con_deuda">Con deuda</option>
+        <option value="al_dia">Al día</option>
+      </select>
+    </div>
     <div id="admin-usuarios-grid" class="admin-usuarios-grid"></div>
+    <div id="admin-usuarios-pager" style="margin-top:1rem;"></div>
   </div>
 
 </div>
@@ -215,6 +246,14 @@
       <div class="form-group"><label>Contraseña (mín. 8 caracteres)</label><input type="password" id="reg-password" placeholder="••••••••" required minlength="8" autocomplete="new-password" /></div>
       <div class="form-group"><label>Teléfono (opcional)</label><input type="tel" id="reg-telefono" placeholder="+54 11 1234-5678" /></div>
       <div class="form-group">
+        <label>Preferencia de lado</label>
+        <select id="reg-lado-preferencia">
+          <option value="ambos">Ambos</option>
+          <option value="drive">Drive</option>
+          <option value="reves">Revés</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Categoría</label>
         <select id="reg-categoria">
           <option value="5ta">5ta</option><option value="4ta">4ta</option>
@@ -253,12 +292,14 @@
       <div class="detail-item"><label>Lugar</label><span id="detail-lugar"></span></div>
       <div class="detail-item"><label>Precio pareja</label><span id="detail-precio"></span></div>
       <div class="detail-item"><label>Cupos</label><span id="detail-cupos"></span></div>
+      <div class="detail-item"><label>Jugadores libres</label><span id="detail-libres"></span></div>
     </div>
     <p id="detail-desc" style="font-size:13px;color:var(--text-muted);margin-bottom:1rem;line-height:1.5;"></p>
     <div class="form-group"><label>Inscriptos</label></div>
     <div class="inscripciones-list" id="detail-inscripciones"></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('modal-detalle')">Cerrar</button>
+      <button class="btn-cancel" id="detail-inscribirse-solo-btn">Anotarme sin pareja</button>
       <button class="btn-confirm" id="detail-inscribirse-btn">Inscribirme</button>
     </div>
   </div>

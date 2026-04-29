@@ -67,6 +67,7 @@ const torneos = {
 // ── Inscripciones ─────────────────────────────────────────────────────────────
 const inscripciones = {
   inscribirse: (data)  => post('/inscripciones', data),
+  inscribirseSolo: (data) => post('/inscripciones/solo', data),
   mias:        ()      => get('/inscripciones/mis-inscripciones'),
   cancelar:    (id)    => del(`/inscripciones/${id}`),
   resultado:   (id, posicion_final) => put(`/inscripciones/${id}/resultado`, { posicion_final }),
@@ -102,7 +103,7 @@ const ranking = {
 // ── Admin ─────────────────────────────────────────────────────────────────────
 const admin = {
   usuarios: {
-    listar:           ()                    => get('/admin/usuarios'),
+    listar:           (params = {})         => get('/admin/usuarios?' + new URLSearchParams(params)),
     detalle:          (id)                  => get(`/admin/usuarios/${id}`),
     cambiarCategoria: (id, categoria)       => put(`/admin/usuarios/${id}/categoria`, { categoria }),
     cambiarEstado:    (id, activo)          => put(`/admin/usuarios/${id}/estado`, { activo }),

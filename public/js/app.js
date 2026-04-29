@@ -7,9 +7,20 @@ const state = {
   highlights: [],
   historial: [],
   ranking: [],
+  adminUsuarios: { page: 1, limit: 24, q: '', categoria: '', rol: '', activo: '', deuda: '' },
   currentUser: null,
   loading: false,
 };
+
+function debounce(fn, wait = 250) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
+const debouncedLoadAdminUsuarios = debounce(() => loadAdminUsuarios(), 250);
 
 // ── Utilidades UI ─────────────────────────────────────────────────────────────
 function showToast(msg, type = 'success') {
@@ -99,6 +110,62 @@ function showPage(id) {
   };
   loaders[id]?.();
   window.scrollTo(0, 0);
+}
+
+function syncAdminUsuariosFiltersUI() {
+  const q = document.getElementById('admin-q');
+  const cat = document.getElementById('admin-cat');
+  const rol = document.getElementById('admin-rol');
+  const activo = document.getElementById('admin-activo');
+  const deuda = document.getElementById('admin-deuda');
+  if (q) q.value = state.adminUsuarios.q || '';
+  if (cat) cat.value = state.adminUsuarios.categoria || '';
+  if (rol) rol.value = state.adminUsuarios.rol || '';
+  if (activo) activo.value = state.adminUsuarios.activo || '';
+  if (deuda) deuda.value = state.adminUsuarios.deuda || '';
+}
+
+function initAdminUsuariosFilters() {
+  const q = document.getElementById('admin-q');
+  const cat = document.getElementById('admin-cat');
+  const rol = document.getElementById('admin-rol');
+  const activo = document.getElementById('admin-activo');
+  const deuda = document.getElementById('admin-deuda');
+
+  if (q && !q.dataset.bound) {
+    q.dataset.bound = '1';
+    q.addEventListener('input', () => {
+      state.adminUsuarios.q = q.value.trim();
+      state.adminUsuarios.page = 1;
+      debouncedLoadAdminUsuarios();
+    });
+  }
+
+  const onChange = () => {
+    state.adminUsuarios.categoria = cat ? cat.value : '';
+    state.adminUsuarios.rol = rol ? rol.value : '';
+    state.adminUsuarios.activo = activo ? activo.value : '';
+    state.adminUsuarios.deuda = deuda ? deuda.value : '';
+    state.adminUsuarios.page = 1;
+    loadAdminUsuarios();
+  };
+
+  if (cat && !cat.dataset.bound) {
+    cat.dataset.bound = '1';
+    cat.addEventListener('change', onChange);
+  }
+  if (rol && !rol.dataset.bound) {
+    rol.dataset.bound = '1';
+    rol.addEventListener('change', onChange);
+  }
+  if (activo && !activo.dataset.bound) {
+    activo.dataset.bound = '1';
+    activo.addEventListener('change', onChange);
+  }
+  if (deuda && !deuda.dataset.bound) {
+    deuda.dataset.bound = '1';
+    deuda.addEventListener('change', onChange);
+  }
 }
 
 // ── Auth UI ───────────────────────────────────────────────────────────────────
@@ -208,6 +275,7 @@ async function handleRegister(e) {
     email:     document.getElementById('reg-email').value,
     password:  document.getElementById('reg-password').value,
     telefono:  document.getElementById('reg-telefono').value,
+    lado_preferencia: document.getElementById('reg-lado-preferencia')?.value,
     categoria: document.getElementById('reg-categoria').value,
   };
   const btn = document.getElementById('reg-btn');
@@ -338,6 +406,8 @@ async function openTorneoDetail(id) {
     document.getElementById('detail-lugar').textContent  = t.lugar || 'A confirmar';
     document.getElementById('detail-precio').textContent = t.precio_pareja > 0 ? `$${t.precio_pareja.toLocaleString('es-AR')}` : 'Gratis';
     document.getElementById('detail-cupos').textContent  = `${inscriptos} / ${t.max_parejas}`;
+    const libres = parseInt(t.inscripciones_pendientes_sin_pareja || 0);
+    document.getElementById('detail-libres').textContent = libres;
     document.getElementById('detail-desc').textContent   = t.descripcion || '';
 
     const inscList = document.getElementById('detail-inscripciones');
@@ -354,6 +424,52 @@ async function openTorneoDetail(id) {
     btn.textContent = lleno ? 'Cupo completo' : 'Inscribirme en este torneo';
     btn.className  = `btn-confirm ${lleno ? 'full' : ''}`;
     btn.onclick    = lleno ? null : () => { closeModal('modal-detalle'); iniciarInscripcion(t.id, t.nombre); };
+
+    const btnSolo = document.getElementById('detail-inscribirse-solo-btn');
+    if (btnSolo) {
+      btnSolo.disabled = lleno;
+      btnSolo.onclick = lleno ? null : async () => {
+        if (!API.auth.isLoggedIn()) {
+          showToast('Iniciá sesión para inscribirte', 'info');
+          openModal('modal-login');
+          return;
+        }
+        btnSolo.disabled = true;
+        const prevText = btnSolo.textContent;
+        btnSolo.textContent = 'Anotándote...';
+        try {
+          const resp = await API.inscripciones.inscribirseSolo({ torneo_id: t.id });
+
+          if (resp && resp.requiere_confirmacion && resp.sugerencia?.asumir_lado) {
+            const nombre = resp.jugador_esperando?.nombre || 'un jugador';
+            const pref = resp.jugador_esperando?.lado_preferencia || '';
+            const lado = resp.sugerencia.asumir_lado;
+            const confirmar = confirm(`${resp.mensaje || 'Hay un jugador esperando.'}\n\nJugador: ${nombre}${pref ? ` (prefiere ${pref})` : ''}\n\n¿Querés jugar asumiendo ${lado}?`);
+            if (!confirmar) {
+              showToast('Perfecto, quedás en espera de una pareja complementaria.', 'info');
+              closeModal('modal-detalle');
+              loadTorneos();
+              return;
+            }
+
+            const resp2 = await API.inscripciones.inscribirseSolo({ torneo_id: t.id, asumir_lado: lado });
+            showToast(resp2.mensaje || 'Listo');
+            closeModal('modal-detalle');
+            loadTorneos();
+            return;
+          }
+
+          showToast(resp.mensaje || 'Listo');
+          closeModal('modal-detalle');
+          loadTorneos();
+        } catch (err) {
+          showToast(err.message, 'error');
+        } finally {
+          btnSolo.disabled = false;
+          btnSolo.textContent = prevText;
+        }
+      };
+    }
 
     openModal('modal-detalle');
   } catch (err) {
@@ -500,7 +616,7 @@ async function loadHistorial() {
         <div class="avatar-ring">${perfil.nombre[0]}${perfil.apellido[0]}</div>
         <div>
           <div class="player-name">${perfil.nombre} ${perfil.apellido}</div>
-          <div class="player-rank">⭐ ${perfil.categoria} Categoría</div>
+          <div class="player-rank">⭐ ${perfil.categoria} Categoría · ${perfil.lado_preferencia ? `🟦 ${perfil.lado_preferencia}` : ''}</div>
         </div>
         <div style="margin-left:auto;text-align:right;">
           <div style="font-family:'Orbitron',sans-serif;font-size:1.4rem;color:var(--star-gold);">${perfil.ranking_pts}</div>
@@ -1076,7 +1192,7 @@ async function handleGuardarCancha(e) {
   const btn = document.getElementById('cancha-form-btn');
   btn.disabled = true;
   btn.textContent = 'Guardando...';
-  
+
   try {
     if (id) {
       await API.canchas.update(id, data);
@@ -1209,14 +1325,34 @@ async function loadAdminUsuarios() {
     return;
   }
 
+  initAdminUsuariosFilters();
+  syncAdminUsuariosFiltersUI();
+
   const el = document.getElementById('admin-usuarios-grid');
   el.innerHTML = '<div class="loading-pulse">Cargando usuarios...</div>';
+  const pagerEl = document.getElementById('admin-usuarios-pager');
+  if (pagerEl) pagerEl.innerHTML = '';
 
   try {
-    const usuarios = await API.admin.usuarios.listar();
-    
+    const params = {
+      page: state.adminUsuarios.page,
+      limit: state.adminUsuarios.limit,
+    };
+    if (state.adminUsuarios.q) params.q = state.adminUsuarios.q;
+    if (state.adminUsuarios.categoria) params.categoria = state.adminUsuarios.categoria;
+    if (state.adminUsuarios.rol) params.rol = state.adminUsuarios.rol;
+    if (state.adminUsuarios.activo !== '') params.activo = state.adminUsuarios.activo;
+    if (state.adminUsuarios.deuda) params.deuda = state.adminUsuarios.deuda;
+
+    const resp = await API.admin.usuarios.listar(params);
+    const usuarios = resp.usuarios || [];
+    const total = resp.total || 0;
+    const page = resp.page || state.adminUsuarios.page;
+    const limit = resp.limit || state.adminUsuarios.limit;
+
     if (!usuarios.length) {
       el.innerHTML = '<p class="text-muted">No hay usuarios registrados</p>';
+      if (pagerEl) pagerEl.innerHTML = '';
       return;
     }
 
@@ -1227,6 +1363,7 @@ async function loadAdminUsuarios() {
           <div class="usuario-info">
             <div class="usuario-nombre">${u.nombre} ${u.apellido}</div>
             <div class="usuario-email">${u.email}</div>
+            <div class="usuario-email">${u.lado_preferencia ? `🟦 ${u.lado_preferencia}` : ''}</div>
             <div class="usuario-meta">
               <span class="badge-categoria ${u.categoria.toLowerCase()}">${u.categoria}</span>
               <span class="badge-rol ${u.rol}">${u.rol}</span>
@@ -1263,10 +1400,28 @@ async function loadAdminUsuarios() {
         </div>
       </div>
     `).join('');
+
+    if (pagerEl) {
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const prevDisabled = page <= 1;
+      const nextDisabled = page >= totalPages;
+      pagerEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn-mini" ${prevDisabled ? 'disabled' : ''} onclick="adminUsuariosGoToPage(${page - 1})">◀ Anterior</button>
+          <div style="color:var(--text-muted);font-size:13px;">Página <strong>${page}</strong> de <strong>${totalPages}</strong> · <strong>${total}</strong> usuarios</div>
+          <button class="btn-mini" ${nextDisabled ? 'disabled' : ''} onclick="adminUsuariosGoToPage(${page + 1})">Siguiente ▶</button>
+        </div>
+      `;
+    }
   } catch (err) {
     el.innerHTML = '<p class="text-muted">Error al cargar usuarios</p>';
     showToast(err.message || 'Error al cargar usuarios', 'error');
   }
+}
+
+function adminUsuariosGoToPage(page) {
+  state.adminUsuarios.page = Math.max(1, parseInt(page, 10) || 1);
+  loadAdminUsuarios();
 }
 
 async function verDetalleUsuario(id) {
@@ -1285,6 +1440,7 @@ async function verDetalleUsuario(id) {
             <div><strong>Email:</strong> ${usuario.email}</div>
             <div><strong>Teléfono:</strong> ${usuario.telefono || 'No especificado'}</div>
             <div><strong>Categoría:</strong> <span class="badge-categoria ${usuario.categoria.toLowerCase()}">${usuario.categoria}</span></div>
+            <div><strong>Preferencia:</strong> ${usuario.lado_preferencia || 'No especificado'}</div>
             <div><strong>Rol:</strong> <span class="badge-rol ${usuario.rol}">${usuario.rol}</span></div>
             <div><strong>Puntos Ranking:</strong> ${usuario.ranking_pts}</div>
             <div><strong>Estado:</strong> ${usuario.activo ? '<span class="badge-activo">Activo</span>' : '<span class="badge-inactivo">Inactivo</span>'}</div>

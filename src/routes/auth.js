@@ -7,7 +7,7 @@ const passport = require('../utils/passport');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { nombre, apellido, email, password, telefono, categoria = '5ta' } = req.body;
+  const { nombre, apellido, email, password, telefono, categoria = '5ta', lado_preferencia = 'ambos' } = req.body;
 
   if (!nombre || !apellido || !email || !password) {
     return res.status(400).json({ error: 'Nombre, apellido, email y contraseña son requeridos' });
@@ -24,10 +24,10 @@ router.post('/register', async (req, res) => {
 
     const password_hash = await bcrypt.hash(password, 12);
     const { rows: [user] } = await query(`
-      INSERT INTO users (nombre, apellido, email, password_hash, telefono, categoria)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, nombre, apellido, email, rol, categoria, ranking_pts, created_at
-    `, [nombre.trim(), apellido.trim(), email.toLowerCase(), password_hash, telefono, categoria]);
+      INSERT INTO users (nombre, apellido, email, password_hash, telefono, categoria, lado_preferencia)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, nombre, apellido, email, rol, categoria, lado_preferencia, ranking_pts, created_at
+    `, [nombre.trim(), apellido.trim(), email.toLowerCase(), password_hash, telefono, categoria, lado_preferencia]);
 
     const token = jwt.sign(
       { id: user.id, email: user.email, rol: user.rol },
@@ -90,7 +90,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const { rows } = await query(`
-      SELECT id, nombre, apellido, email, telefono, rol, categoria, ranking_pts, avatar_url, created_at
+      SELECT id, nombre, apellido, email, telefono, rol, categoria, lado_preferencia, ranking_pts, avatar_url, created_at
       FROM users WHERE id = $1
     `, [req.user.id]);
 
@@ -103,14 +103,14 @@ router.get('/me', authenticate, async (req, res) => {
 
 // PUT /api/auth/me - actualizar perfil
 router.put('/me', authenticate, async (req, res) => {
-  const { nombre, apellido, telefono } = req.body;
+  const { nombre, apellido, telefono, lado_preferencia } = req.body;
   try {
     const { rows: [user] } = await query(`
       UPDATE users SET nombre = COALESCE($1, nombre), apellido = COALESCE($2, apellido),
-        telefono = COALESCE($3, telefono)
-      WHERE id = $4
-      RETURNING id, nombre, apellido, email, telefono, rol, categoria, ranking_pts, avatar_url
-    `, [nombre, apellido, telefono, req.user.id]);
+        telefono = COALESCE($3, telefono), lado_preferencia = COALESCE($4, lado_preferencia)
+      WHERE id = $5
+      RETURNING id, nombre, apellido, email, telefono, rol, categoria, lado_preferencia, ranking_pts, avatar_url
+    `, [nombre, apellido, telefono, lado_preferencia, req.user.id]);
 
     res.json(user);
   } catch (err) {
