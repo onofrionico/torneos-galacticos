@@ -85,6 +85,13 @@ const migrations = `
   );
 
   -- Alteraciones idempotentes (por si la DB ya existía)
+  ALTER TABLE torneos ADD COLUMN IF NOT EXISTS cancha_id UUID;
+  DO $$ BEGIN
+    ALTER TABLE torneos
+      ADD CONSTRAINT torneos_cancha_id_fkey
+      FOREIGN KEY (cancha_id) REFERENCES canchas(id) ON DELETE SET NULL;
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
   ALTER TABLE users ADD COLUMN IF NOT EXISTS lado_preferencia VARCHAR(10) NOT NULL DEFAULT 'ambos';
   DO $$ BEGIN
     ALTER TABLE users ADD CONSTRAINT users_lado_preferencia_check CHECK (lado_preferencia IN ('drive','reves','ambos'));
