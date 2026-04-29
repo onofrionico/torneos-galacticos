@@ -9,7 +9,7 @@ services:
     name: torneos-galacticos
     runtime: node
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm install && npm run db:migrate
     startCommand: npm start
     healthCheckPath: /api/health
     disk:
