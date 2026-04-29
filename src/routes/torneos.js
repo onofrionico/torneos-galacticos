@@ -16,27 +16,49 @@ router.get('/', async (req, res) => {
 
   try {
     params.push(limit, offset);
-    const { rows } = await query(`
-      SELECT
-        t.*,
-        u.nombre || ' ' || u.apellido AS organizador_nombre,
-        COUNT(i.id) FILTER (WHERE i.estado = 'confirmada') AS inscriptos,
-        json_build_object(
-          'id', c.id,
-          'nombre', c.nombre,
-          'direccion', c.direccion,
-          'ciudad', c.ciudad,
-          'provincia', c.provincia
-        ) AS cancha
-      FROM torneos t
-      JOIN users u ON u.id = t.organizador_id
-      LEFT JOIN inscripciones i ON i.torneo_id = t.id
-      LEFT JOIN canchas c ON c.id = t.cancha_id
-      WHERE ${conditions.join(' AND ')}
-      GROUP BY t.id, u.nombre, u.apellido, c.id, c.nombre, c.direccion, c.ciudad, c.provincia
-      ORDER BY t.fecha_inicio ASC
-      LIMIT $${params.length - 1} OFFSET $${params.length}
-    `, params);
+    let rows;
+    try {
+      ({ rows } = await query(`
+        SELECT
+          t.*,
+          u.nombre || ' ' || u.apellido AS organizador_nombre,
+          COUNT(i.id) FILTER (WHERE i.estado = 'confirmada') AS inscriptos,
+          json_build_object(
+            'id', c.id,
+            'nombre', c.nombre,
+            'direccion', c.direccion,
+            'ciudad', c.ciudad,
+            'provincia', c.provincia
+          ) AS cancha
+        FROM torneos t
+        JOIN users u ON u.id = t.organizador_id
+        LEFT JOIN inscripciones i ON i.torneo_id = t.id
+        LEFT JOIN canchas c ON c.id = t.cancha_id
+        WHERE ${conditions.join(' AND ')}
+        GROUP BY t.id, u.nombre, u.apellido, c.id, c.nombre, c.direccion, c.ciudad, c.provincia
+        ORDER BY t.fecha_inicio ASC
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+      `, params));
+    } catch (err) {
+      if (err && err.code === '42703' && /cancha_id/i.test(err.message || '')) {
+        ({ rows } = await query(`
+          SELECT
+            t.*,
+            u.nombre || ' ' || u.apellido AS organizador_nombre,
+            COUNT(i.id) FILTER (WHERE i.estado = 'confirmada') AS inscriptos,
+            NULL::json AS cancha
+          FROM torneos t
+          JOIN users u ON u.id = t.organizador_id
+          LEFT JOIN inscripciones i ON i.torneo_id = t.id
+          WHERE ${conditions.join(' AND ')}
+          GROUP BY t.id, u.nombre, u.apellido
+          ORDER BY t.fecha_inicio ASC
+          LIMIT $${params.length - 1} OFFSET $${params.length}
+        `, params));
+      } else {
+        throw err;
+      }
+    }
 
     // Contar total sin limit/offset
     const countConditions = conditions.join(' AND ');
@@ -56,36 +78,73 @@ router.get('/', async (req, res) => {
 // GET /api/torneos/:id - detalle de torneo (público)
 router.get('/:id', async (req, res) => {
   try {
-    const { rows } = await query(`
-      SELECT
-        t.*,
-        u.nombre || ' ' || u.apellido AS organizador_nombre,
-        row_to_json(c.*) AS cancha,
-        (
-          SELECT COUNT(*)
-          FROM inscripciones ip
-          WHERE ip.torneo_id = t.id
-            AND ip.estado = 'pendiente'
-            AND ip.jugador2_id IS NULL
-        ) AS inscripciones_pendientes_sin_pareja,
-        json_agg(
-          json_build_object(
-            'id', i.id,
-            'estado', i.estado,
-            'posicion_final', i.posicion_final,
-            'jugador1', json_build_object('id', u1.id, 'nombre', u1.nombre || ' ' || u1.apellido),
-            'jugador2_nombre', COALESCE(u2.nombre || ' ' || u2.apellido, i.jugador2_nombre)
-          ) ORDER BY i.created_at
-        ) FILTER (WHERE i.id IS NOT NULL) AS inscripciones
-      FROM torneos t
-      JOIN users u ON u.id = t.organizador_id
-      LEFT JOIN canchas c ON c.id = t.cancha_id
-      LEFT JOIN inscripciones i ON i.torneo_id = t.id
-      LEFT JOIN users u1 ON u1.id = i.jugador1_id
-      LEFT JOIN users u2 ON u2.id = i.jugador2_id
-      WHERE t.id = $1
-      GROUP BY t.id, u.nombre, u.apellido, c.id
-    `, [req.params.id]);
+    let rows;
+    try {
+      ({ rows } = await query(`
+        SELECT
+          t.*,
+          u.nombre || ' ' || u.apellido AS organizador_nombre,
+          row_to_json(c.*) AS cancha,
+          (
+            SELECT COUNT(*)
+            FROM inscripciones ip
+            WHERE ip.torneo_id = t.id
+              AND ip.estado = 'pendiente'
+              AND ip.jugador2_id IS NULL
+          ) AS inscripciones_pendientes_sin_pareja,
+          json_agg(
+            json_build_object(
+              'id', i.id,
+              'estado', i.estado,
+              'posicion_final', i.posicion_final,
+              'jugador1', json_build_object('id', u1.id, 'nombre', u1.nombre || ' ' || u1.apellido),
+              'jugador2_nombre', COALESCE(u2.nombre || ' ' || u2.apellido, i.jugador2_nombre)
+            ) ORDER BY i.created_at
+          ) FILTER (WHERE i.id IS NOT NULL) AS inscripciones
+        FROM torneos t
+        JOIN users u ON u.id = t.organizador_id
+        LEFT JOIN canchas c ON c.id = t.cancha_id
+        LEFT JOIN inscripciones i ON i.torneo_id = t.id
+        LEFT JOIN users u1 ON u1.id = i.jugador1_id
+        LEFT JOIN users u2 ON u2.id = i.jugador2_id
+        WHERE t.id = $1
+        GROUP BY t.id, u.nombre, u.apellido, c.id
+      `, [req.params.id]));
+    } catch (err) {
+      if (err && err.code === '42703' && /cancha_id/i.test(err.message || '')) {
+        ({ rows } = await query(`
+          SELECT
+            t.*,
+            u.nombre || ' ' || u.apellido AS organizador_nombre,
+            NULL::json AS cancha,
+            (
+              SELECT COUNT(*)
+              FROM inscripciones ip
+              WHERE ip.torneo_id = t.id
+                AND ip.estado = 'pendiente'
+                AND ip.jugador2_id IS NULL
+            ) AS inscripciones_pendientes_sin_pareja,
+            json_agg(
+              json_build_object(
+                'id', i.id,
+                'estado', i.estado,
+                'posicion_final', i.posicion_final,
+                'jugador1', json_build_object('id', u1.id, 'nombre', u1.nombre || ' ' || u1.apellido),
+                'jugador2_nombre', COALESCE(u2.nombre || ' ' || u2.apellido, i.jugador2_nombre)
+              ) ORDER BY i.created_at
+            ) FILTER (WHERE i.id IS NOT NULL) AS inscripciones
+          FROM torneos t
+          JOIN users u ON u.id = t.organizador_id
+          LEFT JOIN inscripciones i ON i.torneo_id = t.id
+          LEFT JOIN users u1 ON u1.id = i.jugador1_id
+          LEFT JOIN users u2 ON u2.id = i.jugador2_id
+          WHERE t.id = $1
+          GROUP BY t.id, u.nombre, u.apellido
+        `, [req.params.id]));
+      } else {
+        throw err;
+      }
+    }
 
     if (rows.length === 0) return res.status(404).json({ error: 'Torneo no encontrado' });
     res.json(rows[0]);

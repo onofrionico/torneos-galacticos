@@ -25,17 +25,34 @@ router.get('/', async (req, res) => {
 
   try {
     params.push(limit, offset);
-    const { rows } = await query(`
-      SELECT
-        c.*,
-        COUNT(t.id) FILTER (WHERE t.estado IN ('publicado', 'en_curso')) AS torneos_activos
-      FROM canchas c
-      LEFT JOIN torneos t ON t.cancha_id = c.id
-      WHERE ${conditions.join(' AND ')}
-      GROUP BY c.id
-      ORDER BY c.nombre ASC
-      LIMIT $${params.length - 1} OFFSET $${params.length}
-    `, params);
+    let rows;
+    try {
+      ({ rows } = await query(`
+        SELECT
+          c.*,
+          COUNT(t.id) FILTER (WHERE t.estado IN ('publicado', 'en_curso')) AS torneos_activos
+        FROM canchas c
+        LEFT JOIN torneos t ON t.cancha_id = c.id
+        WHERE ${conditions.join(' AND ')}
+        GROUP BY c.id
+        ORDER BY c.nombre ASC
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+      `, params));
+    } catch (err) {
+      if (err && err.code === '42703' && /cancha_id/i.test(err.message || '')) {
+        ({ rows } = await query(`
+          SELECT
+            c.*,
+            0::bigint AS torneos_activos
+          FROM canchas c
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY c.nombre ASC
+          LIMIT $${params.length - 1} OFFSET $${params.length}
+        `, params));
+      } else {
+        throw err;
+      }
+    }
 
     // Contar total
     const countConditions = conditions.join(' AND ');
@@ -60,25 +77,40 @@ router.get('/', async (req, res) => {
 // GET /api/canchas/:id - detalle de cancha (público)
 router.get('/:id', async (req, res) => {
   try {
-    const { rows } = await query(`
-      SELECT
-        c.*,
-        json_agg(
-          json_build_object(
-            'id', t.id,
-            'nombre', t.nombre,
-            'fecha_inicio', t.fecha_inicio,
-            'fecha_fin', t.fecha_fin,
-            'estado', t.estado,
-            'tipo', t.tipo,
-            'categoria', t.categoria
-          ) ORDER BY t.fecha_inicio DESC
-        ) FILTER (WHERE t.id IS NOT NULL) AS torneos
-      FROM canchas c
-      LEFT JOIN torneos t ON t.cancha_id = c.id
-      WHERE c.id = $1
-      GROUP BY c.id
-    `, [req.params.id]);
+    let rows;
+    try {
+      ({ rows } = await query(`
+        SELECT
+          c.*,
+          json_agg(
+            json_build_object(
+              'id', t.id,
+              'nombre', t.nombre,
+              'fecha_inicio', t.fecha_inicio,
+              'fecha_fin', t.fecha_fin,
+              'estado', t.estado,
+              'tipo', t.tipo,
+              'categoria', t.categoria
+            ) ORDER BY t.fecha_inicio DESC
+          ) FILTER (WHERE t.id IS NOT NULL) AS torneos
+        FROM canchas c
+        LEFT JOIN torneos t ON t.cancha_id = c.id
+        WHERE c.id = $1
+        GROUP BY c.id
+      `, [req.params.id]));
+    } catch (err) {
+      if (err && err.code === '42703' && /cancha_id/i.test(err.message || '')) {
+        ({ rows } = await query(`
+          SELECT
+            c.*,
+            '[]'::json AS torneos
+          FROM canchas c
+          WHERE c.id = $1
+        `, [req.params.id]));
+      } else {
+        throw err;
+      }
+    }
 
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Cancha no encontrada' });
