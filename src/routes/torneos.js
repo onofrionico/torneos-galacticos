@@ -76,6 +76,124 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/torneos/:id - detalle de torneo (público)
+// GET /api/torneos/en-curso - detalle del torneo en curso (público)
+router.get('/en-curso', async (req, res) => {
+  try {
+    const { rows: torneos } = await query(`
+      SELECT id
+      FROM torneos
+      WHERE estado = 'en_curso'
+      ORDER BY fecha_inicio DESC
+      LIMIT 1
+    `);
+
+    if (torneos.length === 0) return res.status(404).json({ error: 'No hay torneo en curso' });
+    const torneoId = torneos[0].id;
+
+    let detalleRows;
+    try {
+      ({ rows: detalleRows } = await query(`
+        SELECT
+          t.*,
+          u.nombre || ' ' || u.apellido AS organizador_nombre,
+          row_to_json(c.*) AS cancha,
+          json_agg(
+            json_build_object(
+              'id', i.id,
+              'estado', i.estado,
+              'posicion_final', i.posicion_final,
+              'jugador1', json_build_object('id', u1.id, 'nombre', u1.nombre || ' ' || u1.apellido),
+              'jugador2', json_build_object('id', u2.id, 'nombre', u2.nombre || ' ' || u2.apellido),
+              'jugador2_nombre', COALESCE(u2.nombre || ' ' || u2.apellido, i.jugador2_nombre),
+              'jugador1_lado', i.jugador1_lado,
+              'jugador2_lado', i.jugador2_lado
+            ) ORDER BY i.created_at
+          ) FILTER (WHERE i.id IS NOT NULL AND i.estado = 'confirmada') AS participantes
+        FROM torneos t
+        JOIN users u ON u.id = t.organizador_id
+        LEFT JOIN canchas c ON c.id = t.cancha_id
+        LEFT JOIN inscripciones i ON i.torneo_id = t.id
+        LEFT JOIN users u1 ON u1.id = i.jugador1_id
+        LEFT JOIN users u2 ON u2.id = i.jugador2_id
+        WHERE t.id = $1
+        GROUP BY t.id, u.nombre, u.apellido, c.id
+      `, [torneoId]));
+    } catch (err) {
+      if (err && err.code === '42703' && /cancha_id/i.test(err.message || '')) {
+        ({ rows: detalleRows } = await query(`
+          SELECT
+            t.*,
+            u.nombre || ' ' || u.apellido AS organizador_nombre,
+            NULL::json AS cancha,
+            json_agg(
+              json_build_object(
+                'id', i.id,
+                'estado', i.estado,
+                'posicion_final', i.posicion_final,
+                'jugador1', json_build_object('id', u1.id, 'nombre', u1.nombre || ' ' || u1.apellido),
+                'jugador2', json_build_object('id', u2.id, 'nombre', u2.nombre || ' ' || u2.apellido),
+                'jugador2_nombre', COALESCE(u2.nombre || ' ' || u2.apellido, i.jugador2_nombre),
+                'jugador1_lado', i.jugador1_lado,
+                'jugador2_lado', i.jugador2_lado
+              ) ORDER BY i.created_at
+            ) FILTER (WHERE i.id IS NOT NULL AND i.estado = 'confirmada') AS participantes
+          FROM torneos t
+          JOIN users u ON u.id = t.organizador_id
+          LEFT JOIN inscripciones i ON i.torneo_id = t.id
+          LEFT JOIN users u1 ON u1.id = i.jugador1_id
+          LEFT JOIN users u2 ON u2.id = i.jugador2_id
+          WHERE t.id = $1
+          GROUP BY t.id, u.nombre, u.apellido
+        `, [torneoId]));
+      } else {
+        throw err;
+      }
+    }
+
+    if (!detalleRows || detalleRows.length === 0) return res.status(404).json({ error: 'Torneo no encontrado' });
+    const torneo = detalleRows[0];
+
+    const { rows: partidos } = await query(`
+      SELECT
+        p.*,
+        json_build_object(
+          'id', i1.id,
+          'jugador1', (u11.nombre || ' ' || u11.apellido),
+          'jugador2', COALESCE((u12.nombre || ' ' || u12.apellido), i1.jugador2_nombre)
+        ) AS pareja1,
+        json_build_object(
+          'id', i2.id,
+          'jugador1', (u21.nombre || ' ' || u21.apellido),
+          'jugador2', COALESCE((u22.nombre || ' ' || u22.apellido), i2.jugador2_nombre)
+        ) AS pareja2
+      FROM partidos p
+      LEFT JOIN inscripciones i1 ON i1.id = p.pareja1_id
+      LEFT JOIN users u11 ON u11.id = i1.jugador1_id
+      LEFT JOIN users u12 ON u12.id = i1.jugador2_id
+      LEFT JOIN inscripciones i2 ON i2.id = p.pareja2_id
+      LEFT JOIN users u21 ON u21.id = i2.jugador1_id
+      LEFT JOIN users u22 ON u22.id = i2.jugador2_id
+      WHERE p.torneo_id = $1
+      ORDER BY
+        CASE LOWER(p.ronda)
+          WHEN 'final' THEN 90
+          WHEN 'semifinal' THEN 80
+          WHEN 'semis' THEN 80
+          WHEN 'cuartos' THEN 70
+          WHEN 'octavos' THEN 60
+          ELSE 10
+        END ASC,
+        COALESCE(p.fecha_partido, p.created_at) ASC,
+        p.created_at ASC
+    `, [torneoId]);
+
+    res.json({ ...torneo, partidos });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener torneo en curso' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     let rows;

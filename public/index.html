@@ -27,6 +27,7 @@
     </div>
     <div class="nav-links">
       <button class="nav-btn ghost" data-page="inicio"     onclick="showPage('inicio')">Inicio</button>
+      <button class="nav-btn ghost" data-page="en-curso"   onclick="showPage('en-curso')">En curso</button>
       <button class="nav-btn ghost" data-page="torneos"    onclick="showPage('torneos')">Torneos</button>
       <button class="nav-btn ghost" data-page="canchas"    onclick="showPage('canchas')">Canchas</button>
       <button class="nav-btn ghost" data-page="historial"  onclick="showPage('historial')">Mi Historial</button>
@@ -97,6 +98,12 @@
       </select>
     </div>
     <div id="torneos-grid" class="tournaments-grid"></div>
+  </div>
+
+  <!-- EN CURSO -->
+  <div class="page" id="page-en-curso">
+    <div class="section-title">Torneo en curso</div>
+    <div id="en-curso-content"></div>
   </div>
 
   <!-- CANCHAS -->

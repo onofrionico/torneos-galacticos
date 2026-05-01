@@ -59,9 +59,17 @@ const auth = {
 const torneos = {
   list:   (params = {}) => get('/torneos?' + new URLSearchParams(params)),
   get:    (id)          => get(`/torneos/${id}`),
+  enCurso: ()           => get('/torneos/en-curso'),
   create: (data)        => post('/torneos', data),
   update: (id, data)    => put(`/torneos/${id}`, data),
   remove: (id)          => del(`/torneos/${id}`),
+};
+
+// ── Partidos ─────────────────────────────────────────────────────────────────
+const partidos = {
+  list: (params = {}) => get('/partidos?' + new URLSearchParams(params)),
+  create: (data) => post('/partidos', data),
+  resultado: (id, data) => put(`/partidos/${id}/resultado`, data),
 };
 
 // ── Inscripciones ─────────────────────────────────────────────────────────────
@@ -115,3 +123,6 @@ const admin = {
 };
 
 window.API = { auth, torneos, canchas, inscripciones, highlights, ranking, admin, token, user };
+
+// Exponer partidos sin romper compatibilidad
+window.API.partidos = partidos;

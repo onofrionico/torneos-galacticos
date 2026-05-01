@@ -7,6 +7,8 @@ const state = {
   highlights: [],
   historial: [],
   ranking: [],
+  enCurso: null,
+  enCursoPoller: null,
   adminUsuarios: { page: 1, limit: 24, q: '', categoria: '', rol: '', activo: '', deuda: '' },
   currentUser: null,
   loading: false,
@@ -99,6 +101,11 @@ function showPage(id) {
   document.getElementById('page-' + id)?.classList.add('active');
   document.querySelector(`.nav-btn[data-page="${id}"]`)?.classList.add('active');
 
+  if (state.enCursoPoller) {
+    clearInterval(state.enCursoPoller);
+    state.enCursoPoller = null;
+  }
+
   const loaders = {
     torneos:    loadTorneos,
     canchas:    loadCanchas,
@@ -106,10 +113,201 @@ function showPage(id) {
     highlights: loadHighlights,
     ranking:    loadRanking,
     inicio:     loadInicio,
+    'en-curso': loadEnCurso,
     admin:      loadAdminUsuarios,
   };
   loaders[id]?.();
   window.scrollTo(0, 0);
+}
+
+function roundSortKey(r) {
+  const rr = String(r || '').toLowerCase();
+  if (rr === 'final') return 90;
+  if (rr === 'semifinal' || rr === 'semis') return 80;
+  if (rr === 'cuartos') return 70;
+  if (rr === 'octavos') return 60;
+  return 10;
+}
+
+function formatPair(p) {
+  if (!p) return '—';
+  const a = p.jugador1 || '—';
+  const b = p.jugador2 || '—';
+  return `${a} & ${b}`;
+}
+
+function formatScore(m) {
+  const s1 = m.set1_p1 != null && m.set1_p2 != null ? `${m.set1_p1}-${m.set1_p2}` : null;
+  const s2 = m.set2_p1 != null && m.set2_p2 != null ? `${m.set2_p1}-${m.set2_p2}` : null;
+  const s3 = m.set3_p1 != null && m.set3_p2 != null ? `${m.set3_p1}-${m.set3_p2}` : null;
+  const parts = [s1, s2, s3].filter(Boolean);
+  return parts.length ? parts.join(' / ') : '—';
+}
+
+async function loadEnCurso() {
+  const el = document.getElementById('en-curso-content');
+  if (!el) return;
+  el.innerHTML = '<div class="loading-pulse">Cargando torneo en curso...</div>';
+
+  async function refresh() {
+    try {
+      const data = await API.torneos.enCurso();
+      state.enCurso = data;
+      renderEnCurso(data);
+    } catch (err) {
+      state.enCurso = null;
+      const msg = err && err.status === 404
+        ? 'No hay torneo en curso en este momento.'
+        : 'Error al cargar el torneo en curso.';
+      el.innerHTML = `<p class="text-muted">${msg}</p>`;
+    }
+  }
+
+  await refresh();
+  state.enCursoPoller = setInterval(() => {
+    if (document.getElementById('page-en-curso')?.classList.contains('active')) refresh();
+  }, 10000);
+}
+
+function renderEnCurso(t) {
+  const el = document.getElementById('en-curso-content');
+  if (!el) return;
+
+  const participantes = Array.isArray(t.participantes) ? t.participantes : [];
+  const partidos = Array.isArray(t.partidos) ? t.partidos : [];
+
+  const currentUser = API.auth.currentUser();
+  const canEdit = currentUser && ['organizador', 'admin'].includes(currentUser.rol);
+
+  const partidosByRonda = {};
+  for (const p of partidos) {
+    const r = p.ronda || 'Ronda';
+    if (!partidosByRonda[r]) partidosByRonda[r] = [];
+    partidosByRonda[r].push(p);
+  }
+  const rondas = Object.keys(partidosByRonda).sort((a, b) => roundSortKey(a) - roundSortKey(b));
+
+  el.innerHTML = `
+    <div class="tournament-card" style="cursor:default;">
+      <div class="card-header">
+        <span class="card-category cat-gold">${t.tipo || ''}</span>
+        <div class="card-title">${t.nombre || ''}</div>
+        <div class="card-date">${formatDate(t.fecha_inicio)} – ${formatDate(t.fecha_fin)}${t.lugar ? ' · ' + t.lugar : ''}</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta" style="grid-template-columns:repeat(3,1fr);">
+          <div class="meta-item"><strong>${t.categoria || '—'}</strong>Categoría</div>
+          <div class="meta-item"><strong>${participantes.length}</strong>Parejas</div>
+          <div class="meta-item"><strong>${t.estado || '—'}</strong>Estado</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:1.25rem;">Participantes</div>
+    <div class="inscripciones-list" style="max-height:none;">
+      ${participantes.length
+        ? participantes.map((p, idx) => `
+            <div class="insc-row">
+              <span>${idx + 1}. ${p.jugador1?.nombre || ''}</span>
+              <span class="text-muted"> & ${p.jugador2_nombre || p.jugador2?.nombre || '—'}</span>
+            </div>
+          `).join('')
+        : '<p class="text-muted">Aún no hay participantes confirmados.</p>'}
+    </div>
+
+    <div class="section-title" style="margin-top:1.25rem;">Grilla de partidos</div>
+    ${rondas.length ? rondas.map(r => `
+      <div style="margin-bottom:1rem;">
+        <div style="font-family:'Orbitron',sans-serif;color:#fff;letter-spacing:.06em;text-transform:uppercase;font-size:12px;margin-bottom:8px;opacity:.85;">${r}</div>
+        <div class="canchas-grid" style="grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));">
+          ${(partidosByRonda[r] || []).map(m => `
+            <div class="cancha-card" style="cursor:default;">
+              <div class="cancha-title">${formatPair(m.pareja1)} vs ${formatPair(m.pareja2)}</div>
+              <div class="cancha-meta">Resultado: <strong>${formatScore(m)}</strong></div>
+              <div class="cancha-meta">Ganador: <strong>${m.ganador_id ? '✓' : '—'}</strong></div>
+              ${canEdit ? `
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                  <button class="btn-mini" onclick="editarResultadoPartido('${m.id}')">✍️ Cargar resultado</button>
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('') : '<p class="text-muted">Aún no hay partidos cargados.</p>'}
+
+    <div class="section-title" style="margin-top:1.25rem;">Llaves</div>
+    ${rondas.length ? `
+      <div style="display:grid;grid-template-columns:repeat(${Math.min(rondas.length, 4)}, minmax(220px, 1fr));gap:12px;">
+        ${rondas.slice(0, 4).map(r => `
+          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:12px;">
+            <div style="font-family:'Orbitron',sans-serif;color:#fff;letter-spacing:.06em;text-transform:uppercase;font-size:12px;margin-bottom:10px;opacity:.85;">${r}</div>
+            ${(partidosByRonda[r] || []).map(m => `
+              <div style="padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.12);margin-bottom:10px;">
+                <div style="color:#fff;font-size:13px;line-height:1.35;">${formatPair(m.pareja1)}</div>
+                <div style="color:#fff;font-size:13px;line-height:1.35;opacity:.85;">${formatPair(m.pareja2)}</div>
+                <div style="color:var(--text-muted);font-size:12px;margin-top:6px;">${formatScore(m)}</div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+      </div>
+      <p class="text-muted" style="margin-top:10px;">Se muestran las rondas según el campo <strong>ronda</strong> de cada partido.</p>
+    ` : '<p class="text-muted">Aún no hay llaves para mostrar.</p>'}
+  `;
+}
+
+async function editarResultadoPartido(id) {
+  const currentUser = API.auth.currentUser();
+  if (!currentUser || !['organizador', 'admin'].includes(currentUser.rol)) {
+    showToast('Sin permisos para editar resultados', 'error');
+    return;
+  }
+
+  const t = state.enCurso;
+  const m = t && Array.isArray(t.partidos) ? t.partidos.find(x => x.id === id) : null;
+  if (!m) {
+    showToast('Partido no encontrado en la vista actual', 'error');
+    return;
+  }
+
+  const s = prompt(
+    'Ingresá el resultado con formato: set1_p1-set1_p2 / set2_p1-set2_p2 / set3_p1-set3_p2\nEj: 6-4 / 3-6 / 6-2\n\nDejá vacío para borrar el resultado',
+    (m.set1_p1 != null && m.set1_p2 != null) ? formatScore(m) : ''
+  );
+  if (s === null) return;
+
+  let payload = {
+    set1_p1: null, set1_p2: null,
+    set2_p1: null, set2_p2: null,
+    set3_p1: null, set3_p2: null,
+    ganador_id: null,
+  };
+
+  if (String(s).trim()) {
+    const parts = String(s).split('/').map(x => x.trim()).filter(Boolean);
+    const sets = parts.map(p => p.split('-').map(n => parseInt(n.trim(), 10)));
+    const getSet = (i) => sets[i] && sets[i].length === 2 && Number.isFinite(sets[i][0]) && Number.isFinite(sets[i][1]) ? sets[i] : null;
+    const a = getSet(0);
+    const b = getSet(1);
+    const c = getSet(2);
+    if (a) { payload.set1_p1 = a[0]; payload.set1_p2 = a[1]; }
+    if (b) { payload.set2_p1 = b[0]; payload.set2_p2 = b[1]; }
+    if (c) { payload.set3_p1 = c[0]; payload.set3_p2 = c[1]; }
+
+    const winner = prompt('Ganador: escribí 1 para Pareja 1, 2 para Pareja 2 (vacío para no marcar)');
+    if (winner === null) return;
+    if (String(winner).trim() === '1' && m.pareja1?.id) payload.ganador_id = m.pareja1.id;
+    if (String(winner).trim() === '2' && m.pareja2?.id) payload.ganador_id = m.pareja2.id;
+  }
+
+  try {
+    await API.partidos.resultado(id, payload);
+    showToast('Resultado actualizado', 'success');
+    if (document.getElementById('page-en-curso')?.classList.contains('active')) loadEnCurso();
+  } catch (err) {
+    showToast(err.message || 'Error al actualizar resultado', 'error');
+  }
 }
 
 function syncAdminUsuariosFiltersUI() {
